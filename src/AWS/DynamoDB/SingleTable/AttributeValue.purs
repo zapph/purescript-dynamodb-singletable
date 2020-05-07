@@ -29,7 +29,11 @@ foreign import data AttributeValue :: Type
 instance attributeValueShow :: Show AttributeValue where
   show = jsonStringify
 
+instance attributeValueEq :: Eq AttributeValue where
+  eq = objEqual
+
 foreign import jsonStringify :: forall a. a -> String
+foreign import objEqual :: forall a. a -> a -> Boolean
 
 -- B
 -- An attribute of type Binary. For example:
