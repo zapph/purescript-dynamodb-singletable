@@ -12,15 +12,16 @@ import Data.Array.ST as STArray
 import Data.FoldableWithIndex (forWithIndex_)
 import Data.Maybe (Maybe(..))
 import Foreign.Object (Object)
+import Foreign.Object as Object
 import Foreign.Object.ST (new, poke) as STObject
 import Foreign.Object.ST.Unsafe (unsafeFreeze) as STObject
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
 
 type UpdateSet =
-  { expression :: String
-  , attributeNames :: Object String
-  , attributeValues :: Item
+  { expression :: Maybe String
+  , attributeNames :: Maybe (Object String)
+  , attributeValues :: Maybe Item
   }
 
 mkUpdate :: forall r. ItemCodec r => r -> UpdateSet
@@ -46,15 +47,15 @@ mkUpdate r = ST.run do
   --🤞swear that we won't modify these anymore.
   setCommands' <- STArray.unsafeFreeze setCommands
   removeCommands' <- STArray.unsafeFreeze removeCommands
-  attributeNames <- STObject.unsafeFreeze names
-  attributeValues <- STObject.unsafeFreeze values
+  names' <- STObject.unsafeFreeze names
+  values' <- STObject.unsafeFreeze values
 
   pure { expression: formatCommands
          { setCommands: setCommands'
          , removeCommands: removeCommands'
          }
-       , attributeNames
-       , attributeValues
+       , attributeNames: filterEmptyObject names'
+       , attributeValues: filterEmptyObject values'
        }
 
   where
@@ -64,14 +65,26 @@ formatCommands ::
   { setCommands :: Array String
   , removeCommands :: Array String
   }
-  -> String
+  -> Maybe String
 formatCommands { setCommands, removeCommands } =
-  Array.intercalate " " $ Array.catMaybes
-  [ mkPart "SET" setCommands
-  , mkPart "REMOVE" removeCommands
-  ]
+  parts <#> Array.intercalate " "
   where
-    mkPart prefix cmds =
-      if Array.null cmds
-      then Nothing
-      else Just $ prefix <> " " <> Array.intercalate ", " cmds
+    parts = filterEmptyArray $ Array.catMaybes
+            [ mkPart "SET" setCommands
+            , mkPart "REMOVE" removeCommands
+            ]
+
+    mkPart prefix cmds = filterEmptyArray cmds <#> \c ->
+      prefix <> " " <> Array.intercalate ", " c
+
+filterEmpty :: forall f a. (f a -> Boolean) -> f a -> Maybe (f a)
+filterEmpty null as =
+  if null as
+  then Nothing
+  else Just as
+
+filterEmptyArray :: forall a. Array a -> Maybe (Array a)
+filterEmptyArray = filterEmpty Array.null
+
+filterEmptyObject :: forall a. Object a -> Maybe (Object a)
+filterEmptyObject = filterEmpty Object.isEmpty

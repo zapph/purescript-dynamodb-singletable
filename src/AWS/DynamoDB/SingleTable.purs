@@ -17,7 +17,7 @@ import Effect.Exception (error)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Untagged.Coercible (coerce)
-import Untagged.Union (UndefinedOr, uorToMaybe)
+import Untagged.Union (UndefinedOr, maybeToUor, uorToMaybe)
 
 newtype SingleTableDb =
   Db { dynamodb :: AWSDynamoDb
@@ -75,9 +75,9 @@ updateItem_ (Db {dynamodb, table }) pk sk a =
         , "SK": avS sk
         }
       , "TableName": table
-      , "UpdateExpression": us.expression
-      , "ExpressionAttributeNames": us.attributeNames
-      , "ExpressionAttributeValues": us.attributeValues
+      , "UpdateExpression": maybeToUor us.expression
+      , "ExpressionAttributeNames": maybeToUor us.attributeNames
+      , "ExpressionAttributeValues": maybeToUor us.attributeValues
       }
 
     us = mkUpdate a
