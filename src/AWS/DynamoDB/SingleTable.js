@@ -11,3 +11,11 @@ exports._getItem = function (dynamodb) {
     };
   };
 };
+
+exports._updateItem = function (dynamodb) {
+  return function (params) {
+    return function () {
+      return dynamodb.updateItem(params).promise();
+    };
+  };
+};
