@@ -4,6 +4,7 @@ import Prelude
 
 import Data.DateTime (DateTime)
 import Data.Either (fromRight, hush)
+import Data.FoldableWithIndex (forWithIndex_)
 import Data.Formatter.DateTime (Formatter, format, parseFormatString, unformat)
 import Data.Int as Int
 import Data.Maybe (Maybe(..), fromJust)
@@ -11,9 +12,10 @@ import Data.Number as Number
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
-import Data.Traversable (traverse)
+import Data.Traversable (for, traverse)
 import Foreign.Object (Object)
 import Foreign.Object as Object
+import Foreign.Object.ST as STObject
 import Partial.Unsafe (unsafePartial)
 import Prim.Row as Row
 import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
@@ -22,7 +24,6 @@ import Record.Builder as RB
 import Type.Row.Homogeneous (class Homogeneous)
 import Type.RowList (RLProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
-import Untagged.Union (UndefinedOr, maybeToUor)
 
 foreign import data AttributeValue :: Type
 
@@ -270,26 +271,34 @@ instance avCodecDateTime :: AVCodec DateTime where
   writeAV = writeAV <<< format iso8601Ms
 
 type Item = Object AttributeValue
+type Item' = Object (Maybe AttributeValue)
+
+removeEmptyAVs :: Item' -> Item
+removeEmptyAVs i' = Object.runST do
+  o <- STObject.new
+  forWithIndex_ i' \k mv -> for mv \v -> STObject.poke k v o
+  pure o
 
 class ItemCodec a where
   readItem :: Item -> Maybe a
-  writeItem :: a -> Item
+  writeItem' :: a -> Item'
+
+writeItem :: forall a. ItemCodec a => a -> Item
+writeItem = removeEmptyAVs <<< writeItem'
 
 instance itemCodecR
          :: ( RowToList r rl
-            , Homogeneous r' (UndefinedOr AttributeValue)
+            , Homogeneous r' (Maybe AttributeValue)
             , ItemCodecRL rl () r () r' r
             )
             => ItemCodec {|r} where
   readItem item =
     readItemRL (RLProxy :: _ rl) item <#>
     \b -> RB.build b {}
-  writeItem a = fromHomogeneousUor r
+  writeItem' a = Object.fromHomogeneous r
     where
       r = RB.build (writeItemRL (RLProxy :: _ rl) a) {}
 
-fromHomogeneousUor :: forall r a. Homogeneous r (UndefinedOr a) => {|r} -> Object a
-fromHomogeneousUor = unsafeCoerce
 
 class ItemCodecRL (rl :: RowList) (r1 :: # Type) (r2 :: # Type) (r1' :: # Type) (r2' :: # Type) (r :: # Type) | rl -> r1 r2 r1' r2' r where
   readItemRL :: RLProxy rl -> Item -> Maybe (RB.Builder {|r1} {|r2})
@@ -306,7 +315,7 @@ instance itemCodecRLCons
      , ItemValueCodec v
      , IsSymbol k
      , Row.Cons k v _r r
-     , Row.Cons k (UndefinedOr AttributeValue) rm' r2'
+     , Row.Cons k (Maybe AttributeValue) rm' r2'
      , Row.Lacks k rm'
      )
      => ItemCodecRL (Cons k v tl) r1 r2 r1' r2' r where
@@ -328,7 +337,7 @@ instance itemCodecRLCons
       sp = SProxy :: _ k
       v = Record.get sp r
       av = writeItemValue v
-      hBuilder = RB.insert sp (maybeToUor av)
+      hBuilder = RB.insert sp av
 
 class ItemValueCodec a where
   readItemValue :: Maybe AttributeValue -> Maybe a
