@@ -50,8 +50,8 @@ getItem (Db { dynamodb, table }) pk sk =
   where
     params =
       { "Key": Object.fromHomogeneous
-        { "PK": avS pk
-        , "SK": avS sk
+        { "pk": avS pk
+        , "sk": avS sk
         }
       , "TableName": table
       }
@@ -71,8 +71,8 @@ updateItem_ (Db {dynamodb, table }) pk sk a =
   where
     params =
       { "Key": Object.fromHomogeneous
-        { "PK": avS pk
-        , "SK": avS sk
+        { "pk": avS pk
+        , "sk": avS sk
         }
       , "TableName": table
       , "UpdateExpression": maybeToUor us.expression
