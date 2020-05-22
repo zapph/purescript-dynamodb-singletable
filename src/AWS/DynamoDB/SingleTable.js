@@ -12,6 +12,14 @@ exports._getItem = function (dynamodb) {
   };
 };
 
+exports._putItem = function (dynamodb) {
+  return function (params) {
+    return function () {
+      return dynamodb.updateItem(params).promise();
+    };
+  };
+};
+
 exports._updateItem = function (dynamodb) {
   return function (params) {
     return function () {
