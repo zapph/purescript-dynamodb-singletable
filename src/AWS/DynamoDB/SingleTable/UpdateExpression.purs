@@ -1,6 +1,6 @@
 module AWS.DynamoDB.SingleTable.UpdateExpression
        ( UpdateSet
-       , mkUpdate
+       , mkSimpleUpdate
        ) where
 
 import Prelude
@@ -24,8 +24,8 @@ type UpdateSet =
   , attributeValues :: Maybe Item
   }
 
-mkUpdate :: forall r. ItemCodec r => r -> UpdateSet
-mkUpdate r = ST.run do
+mkSimpleUpdate :: forall r. ItemCodec r => r -> UpdateSet
+mkSimpleUpdate r = ST.run do
   names <- STObject.new
   values <- STObject.new
 

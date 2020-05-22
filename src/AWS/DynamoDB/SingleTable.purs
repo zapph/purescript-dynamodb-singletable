@@ -11,7 +11,7 @@ module AWS.DynamoDB.SingleTable
 import Prelude
 
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, AttributeValue, avS, readItem, writeItem)
-import AWS.DynamoDB.SingleTable.UpdateExpression (mkUpdate)
+import AWS.DynamoDB.SingleTable.UpdateExpression (mkSimpleUpdate)
 import Control.Promise (Promise, toAffE)
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
@@ -108,7 +108,7 @@ updateItem_ {pk, sk} a (Db {dynamodb, table}) =
       , "ExpressionAttributeValues": maybeToUor us.attributeValues
       }
 
-    us = mkUpdate a
+    us = mkSimpleUpdate a
 
 type Capacity =
   { "CapacityUnits" :: UndefinedOr Number
