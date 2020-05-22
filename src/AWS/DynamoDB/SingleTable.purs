@@ -11,7 +11,7 @@ module AWS.DynamoDB.SingleTable
 import Prelude
 
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, AttributeValue, avS, readItem, writeItem)
-import AWS.DynamoDB.SingleTable.UpdateExpression (mkSimpleUpdate)
+import AWS.DynamoDB.SingleTable.UpdateExpression (mkSimpleUpdate, updateSetAttributeNames, updateSetAttributeValues, updateSetExpression)
 import Control.Promise (Promise, toAffE)
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
@@ -103,9 +103,9 @@ updateItem_ {pk, sk} a (Db {dynamodb, table}) =
         , "sk": avS sk
         }
       , "TableName": table
-      , "UpdateExpression": maybeToUor us.expression
-      , "ExpressionAttributeNames": maybeToUor us.attributeNames
-      , "ExpressionAttributeValues": maybeToUor us.attributeValues
+      , "UpdateExpression": maybeToUor (updateSetExpression us)
+      , "ExpressionAttributeNames": maybeToUor (updateSetAttributeNames us)
+      , "ExpressionAttributeValues": maybeToUor (updateSetAttributeValues us)
       }
 
     us = mkSimpleUpdate a

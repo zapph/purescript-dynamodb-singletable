@@ -1,5 +1,8 @@
 module AWS.DynamoDB.SingleTable.UpdateExpression
        ( UpdateSet
+       , updateSetExpression
+       , updateSetAttributeNames
+       , updateSetAttributeValues
        , mkSimpleUpdate
        ) where
 
@@ -18,11 +21,20 @@ import Foreign.Object.ST.Unsafe (unsafeFreeze) as STObject
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
 
-type UpdateSet =
+newtype UpdateSet = US
   { expression :: Maybe String
   , attributeNames :: Maybe (Object String)
   , attributeValues :: Maybe Item
   }
+
+updateSetExpression :: UpdateSet -> Maybe String
+updateSetExpression (US { expression }) = expression
+
+updateSetAttributeNames :: UpdateSet -> Maybe (Object String)
+updateSetAttributeNames (US { attributeNames }) = attributeNames
+
+updateSetAttributeValues :: UpdateSet -> Maybe Item
+updateSetAttributeValues (US { attributeValues }) = attributeValues
 
 mkSimpleUpdate :: forall r. ItemCodec r => r -> UpdateSet
 mkSimpleUpdate r = ST.run do
@@ -50,13 +62,13 @@ mkSimpleUpdate r = ST.run do
   names' <- STObject.unsafeFreeze names
   values' <- STObject.unsafeFreeze values
 
-  pure { expression: formatCommands
-         { setCommands: setCommands'
-         , removeCommands: removeCommands'
-         }
-       , attributeNames: filterEmptyObject names'
-       , attributeValues: filterEmptyObject values'
-       }
+  pure $ US { expression: formatCommands
+              { setCommands: setCommands'
+              , removeCommands: removeCommands'
+              }
+            , attributeNames: filterEmptyObject names'
+            , attributeValues: filterEmptyObject values'
+            }
 
   where
     item' = writeItem' r
