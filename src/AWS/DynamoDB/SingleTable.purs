@@ -1,6 +1,7 @@
 module AWS.DynamoDB.SingleTable
        ( SingleTableDb
        , PrimaryKey
+       , Item
        , GSI1
        , mkSingleTableDb
        , getItem
@@ -11,7 +12,7 @@ module AWS.DynamoDB.SingleTable
 import Prelude
 
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, AttributeValue, avS, readItem, writeItem)
-import AWS.DynamoDB.SingleTable.UpdateExpression (mkSimpleUpdate, updateSetAttributeNames, updateSetAttributeValues, updateSetExpression)
+import AWS.DynamoDB.SingleTable.UpdateExpression (UpdateSet, updateSetAttributeNames, updateSetAttributeValues, updateSetExpression)
 import Control.Promise (Promise, toAffE)
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
@@ -88,13 +89,12 @@ putItem_ a (Db {dynamodb, table}) =
       }
 
 updateItem_
-  :: forall a
-     . ItemCodec a
-     => PrimaryKey
-     -> a
+  :: forall r
+     . UpdateSet r
+     -> PrimaryKey
      -> SingleTableDb
      -> Aff Unit
-updateItem_ {pk, sk} a (Db {dynamodb, table}) =
+updateItem_ us {pk, sk} (Db {dynamodb, table}) =
   toAffE $ _updateItem dynamodb (coerce params)
   where
     params =
@@ -107,8 +107,6 @@ updateItem_ {pk, sk} a (Db {dynamodb, table}) =
       , "ExpressionAttributeNames": maybeToUor (updateSetAttributeNames us)
       , "ExpressionAttributeValues": maybeToUor (updateSetAttributeValues us)
       }
-
-    us = mkSimpleUpdate a
 
 type Capacity =
   { "CapacityUnits" :: UndefinedOr Number

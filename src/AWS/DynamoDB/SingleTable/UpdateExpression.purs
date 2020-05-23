@@ -4,6 +4,26 @@ module AWS.DynamoDB.SingleTable.UpdateExpression
        , updateSetAttributeNames
        , updateSetAttributeValues
        , mkSimpleUpdate
+
+       , UpdateSet'
+       , buildParams
+       , Path
+       , SetValue
+       , setValue
+       , setValuePlus
+       , setValueMinus
+       , Operand
+       , opPath
+       , opValue
+       , opIfNotExists
+       , opListAppend
+       , class Settable
+       , set
+       , remove
+       , class Addable
+       , add
+       , class Deletable
+       , delete
        ) where
 
 import Prelude
@@ -35,7 +55,7 @@ import Prim.Row as Row
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html
 
-newtype UpdateSet = US
+newtype UpdateSet (all :: # Type) = US
   { expression :: Maybe String
   , attributeNames :: Maybe (Object String)
   , attributeValues :: Maybe Item
@@ -58,27 +78,32 @@ type BuilderF a = State BuilderSt a
 
 buildParams ::
   forall all updated.
-  UpdateSet' all updated ->
-  { expression :: Maybe String
-  , attributeNames :: Maybe (Object String)
-  , attributeValues :: Maybe Item
-  }
-buildParams (USet { setActions, removeActions, addActions, deleteActions }) =
-  { expression:
-    if String.null expr
-    then Nothing
-    else Just expr
-  , attributeNames:
-    if Map.isEmpty finalSt.names
-    then Just $ mapToObject finalSt.names
-    else Nothing
-  , attributeValues:
-    if Map.isEmpty finalSt.values
-    then Just $ mapToObject finalSt.values
-    else Nothing
-  }
+  (UpdateSet' all () -> UpdateSet' all updated) ->
+  UpdateSet all
+buildParams f =
+  US { expression:
+       if String.null expr
+       then Nothing
+       else Just expr
+     , attributeNames:
+       if Map.isEmpty finalSt.names
+       then Just $ mapToObject finalSt.names
+       else Nothing
+     , attributeValues:
+       if Map.isEmpty finalSt.values
+       then Just $ mapToObject finalSt.values
+       else Nothing
+     }
 
   where
+    USet { setActions, removeActions, addActions, deleteActions }
+      = f ( USet { setActions: mempty
+                 , removeActions: mempty
+                 , addActions: mempty
+                 , deleteActions: mempty
+                 }
+          )
+
     res :: Tuple String BuilderSt
     res = runState addAllActions
       { names: mempty
@@ -236,14 +261,6 @@ opListAppend ::
   Operand r (Array v)
 opListAppend = OListAppend
 
-init :: forall all. UpdateSet' all ()
-init =
-  USet { setActions: mempty
-       , removeActions: mempty
-       , addActions: mempty
-       , deleteActions: mempty
-       }
-
 class Settable typ v | typ -> v
 
 instance settableMaybe :: Settable (Maybe v) v
@@ -335,16 +352,16 @@ data USEntry =
   USSet { name :: String, value :: String }
   | USRemove String
 
-updateSetExpression :: UpdateSet -> Maybe String
+updateSetExpression :: forall a. UpdateSet a -> Maybe String
 updateSetExpression (US { expression }) = expression
 
-updateSetAttributeNames :: UpdateSet -> Maybe (Object String)
+updateSetAttributeNames :: forall a. UpdateSet a -> Maybe (Object String)
 updateSetAttributeNames (US { attributeNames }) = attributeNames
 
-updateSetAttributeValues :: UpdateSet -> Maybe Item
+updateSetAttributeValues :: forall a. UpdateSet a -> Maybe Item
 updateSetAttributeValues (US { attributeValues }) = attributeValues
 
-mkSimpleUpdate :: forall r. ItemCodec r => r -> UpdateSet
+mkSimpleUpdate :: forall r. ItemCodec {|r} => {|r} -> UpdateSet r
 mkSimpleUpdate r = ST.run do
   names <- STObject.new
   values <- STObject.new
