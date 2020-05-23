@@ -6,7 +6,7 @@ module AWS.DynamoDB.SingleTable
        , mkSingleTableDb
        , getItem
        , putItem_
-       , updateItem_
+       , updateItem
        ) where
 
 import Prelude
@@ -20,7 +20,7 @@ import Effect.Aff (Aff, throwError)
 import Effect.Exception (error)
 import Foreign.Object (Object)
 import Foreign.Object as Object
-import Literals (StringLit)
+import Literals (StringLit, stringLit)
 import Untagged.Coercible (coerce)
 import Untagged.Union (type (|+|), UndefinedOr, maybeToUor, uorToMaybe)
 
@@ -88,14 +88,19 @@ putItem_ a (Db {dynamodb, table}) =
       , "TableName": table
       }
 
-updateItem_
-  :: forall r
-     . UpdateSet r
-     -> PrimaryKey
-     -> SingleTableDb
-     -> Aff Unit
-updateItem_ us {pk, sk} (Db {dynamodb, table}) =
-  toAffE $ _updateItem dynamodb (coerce params)
+updateItem::
+  forall r.
+  ItemCodec {|r} =>
+  UpdateSet r ->
+  PrimaryKey ->
+  SingleTableDb ->
+  Aff {|r}
+updateItem us {pk, sk} (Db {dynamodb, table}) = do
+  res <- toAffE $ _updateItem dynamodb (coerce params)
+  case uorToMaybe res."Attributes" >>= readItem of
+    Just a -> pure a
+    Nothing -> throwError $ error "unreadable update response"
+
   where
     params =
       { "Key": Object.fromHomogeneous
@@ -106,6 +111,7 @@ updateItem_ us {pk, sk} (Db {dynamodb, table}) =
       , "UpdateExpression": maybeToUor (updateSetExpression us)
       , "ExpressionAttributeNames": maybeToUor (updateSetAttributeNames us)
       , "ExpressionAttributeValues": maybeToUor (updateSetAttributeValues us)
+      , "ReturnValues": stringLit :: _ "ALL_NEW"
       }
 
 type Capacity =
@@ -159,8 +165,16 @@ foreign import _updateItem
   :: AWSDynamoDb
      -> { "Key" :: Object AttributeValue
         , "TableName" :: String
-        , "UpdateExpression" :: UndefinedOr String
+        , "ConditionExpression" :: UndefinedOr String
         , "ExpressionAttributeNames" :: UndefinedOr (Object String)
         , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
+        , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
+        , "ReturnItemCollectionMetrics" :: UndefinedOr (StringLit "SIZE" |+| StringLit "NONE")
+        , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
+        , "UpdateExpression" :: UndefinedOr String
+
         }
-     -> Effect (Promise Unit)
+     -> Effect (Promise { "Attributes" :: UndefinedOr (Object AttributeValue)
+                        , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+                        , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
+                        })
