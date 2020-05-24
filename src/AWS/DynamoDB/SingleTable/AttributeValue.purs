@@ -9,8 +9,8 @@ import Data.Formatter.DateTime (Formatter, format, parseFormatString, unformat)
 import Data.Int as Int
 import Data.Maybe (Maybe(..), fromJust)
 import Data.Number as Number
-import Data.Set (Set)
-import Data.Set as Set
+import Data.Set.NonEmpty (NonEmptySet)
+import Data.Set.NonEmpty as NonEmptySet
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Traversable (for, traverse)
 import Foreign.Object (Object)
@@ -221,9 +221,9 @@ instance avCodecBinary :: AVCodec Binary where
   readAV = caseB (Just <<< unsafeB64ToBinary) Nothing
   writeAV = avB <<< toB64
 
-instance avCodecBinarySet :: AVCodec (Set Binary) where
-  readAV = caseBS (Just <<< Set.fromFoldable <<< map unsafeB64ToBinary) Nothing
-  writeAV = avBS <<< map toB64 <<< Set.toUnfoldable
+instance avCodecBinarySet :: AVCodec (NonEmptySet Binary) where
+  readAV = caseBS (NonEmptySet.fromFoldable <<< map unsafeB64ToBinary) Nothing
+  writeAV = avBS <<< map toB64 <<< NonEmptySet.toUnfoldable
 
 instance avCodecBoolean :: AVCodec Boolean where
   readAV = caseBOOL Just Nothing
@@ -241,9 +241,9 @@ instance avCodecNumber :: AVCodec Number where
   readAV = caseN_ Just Nothing
   writeAV = avN <<< show
 
-instance avCodecNumberSet :: AVCodec (Set Number) where
-  readAV = caseNS_ (Just <<< Set.fromFoldable) Nothing
-  writeAV = avNS <<< map show <<< Set.toUnfoldable
+instance avCodecNumberSet :: AVCodec (NonEmptySet Number) where
+  readAV = caseNS_ (NonEmptySet.fromFoldable) Nothing
+  writeAV = avNS <<< map show <<< NonEmptySet.toUnfoldable
 
 instance avCodecUnit :: AVCodec Unit where
   readAV = caseNULL_ (Just unit) Nothing
@@ -253,9 +253,9 @@ instance avCodecString :: AVCodec String where
   readAV = caseS Just Nothing
   writeAV = avS
 
-instance avCodecStringSet :: AVCodec (Set String) where
-  readAV = caseSS (Just <<< Set.fromFoldable) Nothing
-  writeAV = avSS <<< map show <<< Set.toUnfoldable
+instance avCodecStringSet :: AVCodec (NonEmptySet String) where
+  readAV = caseSS (NonEmptySet.fromFoldable) Nothing
+  writeAV = avSS <<< map show <<< NonEmptySet.toUnfoldable
 
 -- Derived from prisms
 instance avCodecInt :: AVCodec Int where
