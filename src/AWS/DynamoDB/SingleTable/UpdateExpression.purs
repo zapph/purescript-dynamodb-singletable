@@ -87,12 +87,12 @@ buildParams f =
        else Just expr
      , attributeNames:
        if Map.isEmpty finalSt.names
-       then Just $ mapToObject finalSt.names
-       else Nothing
+       then Nothing
+       else Just $ mapToObject finalSt.names
      , attributeValues:
        if Map.isEmpty finalSt.values
-       then Just $ mapToObject finalSt.values
-       else Nothing
+       then Nothing
+       else Just $ mapToObject finalSt.values
      }
 
   where
