@@ -15,7 +15,7 @@ exports._getItem = function (dynamodb) {
 exports._putItem = function (dynamodb) {
   return function (params) {
     return function () {
-      return dynamodb.updateItem(params).promise();
+      return dynamodb.putItem(params).promise();
     };
   };
 };
