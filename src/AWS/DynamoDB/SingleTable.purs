@@ -5,6 +5,7 @@ module AWS.DynamoDB.SingleTable
        , GSI1
        , mkSingleTableDb
        , getItem
+       , deleteItem
        , putItem_
        , updateItem
        ) where
@@ -15,6 +16,7 @@ import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, AttributeValue,
 import AWS.DynamoDB.SingleTable.UpdateExpression (UpdateSet, updateSetAttributeNames, updateSetAttributeValues, updateSetExpression)
 import Control.Promise (Promise, toAffE)
 import Data.Maybe (Maybe(..))
+import Data.Traversable (traverse)
 import Effect (Effect)
 import Effect.Aff (Aff, throwError)
 import Effect.Exception (error)
@@ -57,12 +59,8 @@ getItem
      -> SingleTableDb
      -> Aff (Maybe (Item a))
 getItem { pk, sk } (Db { dynamodb, table }) =
-  getRawItem >>= case _ of
-    Just raw -> case readItem raw of
-      Just a -> pure $ Just a
-      Nothing -> throwError $ error "Unable to read item"
-    Nothing ->
-      pure Nothing
+  getRawItem >>= traverse readItemOrErr
+
   where
     params =
       { "Key": Object.fromHomogeneous
@@ -73,6 +71,28 @@ getItem { pk, sk } (Db { dynamodb, table }) =
       }
     getRawItem =
       uorToMaybe <<< _."Item" <$> toAffE (_getItem dynamodb params)
+
+deleteItem
+  :: forall a
+     . ItemCodec (Item a)
+     => PrimaryKey
+     -> SingleTableDb
+     -> Aff (Maybe (Item a))
+deleteItem { pk, sk } (Db { dynamodb, table }) =
+  deleteRawItem >>= traverse readItemOrErr
+
+  where
+    params =
+      { "Key": Object.fromHomogeneous
+        { "pk": avS pk
+        , "sk": avS sk
+        }
+      , "TableName": table
+      , "ReturnValues": stringLit :: _ "ALL_OLD"
+      }
+    deleteRawItem =
+      uorToMaybe <<< _."Attributes" <$> toAffE (_deleteItem dynamodb (coerce params))
+
 
 putItem_
   :: forall a
@@ -97,9 +117,7 @@ updateItem::
   Aff {|r}
 updateItem us {pk, sk} (Db {dynamodb, table}) = do
   res <- toAffE $ _updateItem dynamodb (coerce params)
-  case uorToMaybe res."Attributes" >>= readItem of
-    Just a -> pure a
-    Nothing -> throwError $ error "unreadable update response"
+  require "Attributes" (uorToMaybe res."Attributes") >>= readItemOrErr
 
   where
     params =
@@ -113,6 +131,24 @@ updateItem us {pk, sk} (Db {dynamodb, table}) = do
       , "ExpressionAttributeValues": maybeToUor (updateSetAttributeValues us)
       , "ReturnValues": stringLit :: _ "ALL_NEW"
       }
+
+require ::
+  forall a.
+  String ->
+  Maybe a ->
+  Aff a
+require _ (Just a) = pure a
+require name Nothing = throwError $ error $ "did not find " <> name
+
+readItemOrErr ::
+  forall a.
+  ItemCodec a =>
+  Object AttributeValue ->
+  Aff a
+readItemOrErr o = case readItem o of
+  Just a -> pure a
+  Nothing -> throwError $ error "unreadable item"
+
 
 type Capacity =
   { "CapacityUnits" :: UndefinedOr Number
@@ -141,6 +177,14 @@ foreign import _getItem
         , "TableName" :: String
         }
      -> Effect (Promise { "Item" :: UndefinedOr (Object AttributeValue) })
+
+foreign import _deleteItem
+  :: AWSDynamoDb
+     -> { "Key" :: Object AttributeValue
+        , "TableName" :: String
+        , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
+        }
+     -> Effect (Promise { "Attributes" :: UndefinedOr (Object AttributeValue) })
 
 foreign import _putItem
   :: AWSDynamoDb
