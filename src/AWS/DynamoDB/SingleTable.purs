@@ -149,7 +149,10 @@ queryPrimaryBySkPrefix ::
   Aff (Array (Item a))
 queryPrimaryBySkPrefix =
   queryBySkPrefix
-  { pkPath: "pk", skPath: "sk" }
+  { pkPath: "pk"
+  , skPath: "sk"
+  , indexName: Nothing
+  }
 
 queryGsi1BySkPrefix ::
   forall a.
@@ -187,16 +190,21 @@ queryGsiNBySkPrefix ::
   Aff (Array (Item a))
 queryGsiNBySkPrefix n =
   queryBySkPrefix
-  { pkPath: "gsi" <> show n <> "pk", skPath: "gsi" <> show n <> "sk" }
+  { pkPath: "gsi" <> n' <> "pk"
+  , skPath: "gsi" <> n' <> "sk"
+  , indexName: Just $ "gsi" <> n'
+  }
+  where
+    n' = show n
 
 queryBySkPrefix ::
   forall a.
   ItemCodec (Item a) =>
-  { pkPath :: String, skPath :: String } ->
+  { pkPath :: String, skPath :: String, indexName :: Maybe String } ->
   { pk :: String, skPrefix :: String } ->
   SingleTableDb ->
   Aff (Array (Item a))
-queryBySkPrefix { pkPath, skPath } { pk, skPrefix } (Db { dynamodb, table }) =
+queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } (Db { dynamodb, table }) =
   queryRawItems >>= traverse readItemOrErr
 
   where
@@ -205,6 +213,7 @@ queryBySkPrefix { pkPath, skPath } { pk, skPrefix } (Db { dynamodb, table }) =
 
     params =
       { "TableName": table
+      , "IndexName": maybeToUor indexName
       , "KeyConditionExpression": "#pk = :pk and begins_with(#sk, :skPrefix)"
       , "ExpressionAttributeNames": Object.fromHomogeneous
         { "#pk": pkPath
