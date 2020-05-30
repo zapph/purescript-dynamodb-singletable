@@ -3,8 +3,6 @@ module AWS.DynamoDB.SingleTable.UpdateExpression
        , updateSetExpression
        , updateSetAttributeNames
        , updateSetAttributeValues
-       , mkSimpleUpdate
-
        , UpdateSet'
        , buildParams
        , Path
@@ -28,14 +26,12 @@ module AWS.DynamoDB.SingleTable.UpdateExpression
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, class ItemCodec, AttributeValue, Item, writeAV, writeItem')
-import Control.Monad.ST as ST
+import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, AttributeValue, Item, writeAV)
 import Control.Monad.State (State, StateT(..), modify, runState)
 import Data.Array as Array
-import Data.Array.ST as STArray
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
-import Data.FoldableWithIndex (forWithIndex_, traverseWithIndex_)
+import Data.FoldableWithIndex (traverseWithIndex_)
 import Data.List (List(..), (:))
 import Data.Map (Map)
 import Data.Map as Map
@@ -47,9 +43,7 @@ import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..), fst, snd)
 import Foreign.Object (Object)
 import Foreign.Object as Object
-import Foreign.Object.ST (new, poke) as STObject
 import Foreign.Object.ST as ObjectST
-import Foreign.Object.ST.Unsafe (unsafeFreeze) as STObject
 import Prim.Row as Row
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
@@ -360,43 +354,6 @@ updateSetAttributeNames (US { attributeNames }) = attributeNames
 
 updateSetAttributeValues :: forall a. UpdateSet a -> Maybe Item
 updateSetAttributeValues (US { attributeValues }) = attributeValues
-
-mkSimpleUpdate :: forall r. ItemCodec {|r} => {|r} -> UpdateSet r
-mkSimpleUpdate r = ST.run do
-  names <- STObject.new
-  values <- STObject.new
-
-  setCommands <- STArray.empty
-  removeCommands <- STArray.empty
-
-  forWithIndex_ item' \k mv -> do
-    let nameAlias = "#" <> k
-        valueAlias = ":" <> k
-    _ <- STObject.poke nameAlias k names
-
-    case mv of
-      Just v -> do
-        _ <- STObject.poke valueAlias v values
-        STArray.push (nameAlias <> " = " <> valueAlias) setCommands
-      Nothing -> do
-        STArray.push nameAlias removeCommands
-
-  --🤞swear that we won't modify these anymore.
-  setCommands' <- STArray.unsafeFreeze setCommands
-  removeCommands' <- STArray.unsafeFreeze removeCommands
-  names' <- STObject.unsafeFreeze names
-  values' <- STObject.unsafeFreeze values
-
-  pure $ US { expression: formatCommands
-              { setCommands: setCommands'
-              , removeCommands: removeCommands'
-              }
-            , attributeNames: filterEmptyObject names'
-            , attributeValues: filterEmptyObject values'
-            }
-
-  where
-    item' = writeItem' r
 
 formatCommands ::
   { setCommands :: Array String
