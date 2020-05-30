@@ -27,20 +27,18 @@ module AWS.DynamoDB.SingleTable.UpdateExpression
 import Prelude
 
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, AttributeValue, Item, writeAV)
-import Control.Monad.State (State, StateT(..), modify, runState)
+import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
+import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import Data.Array as Array
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
 import Data.FoldableWithIndex (traverseWithIndex_)
 import Data.List (List(..), (:))
 import Data.Map (Map)
-import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Set (Set)
-import Data.String as String
 import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
 import Data.Traversable (traverse)
-import Data.Tuple (Tuple(..), fst, snd)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Foreign.Object.ST as ObjectST
@@ -62,71 +60,36 @@ newtype UpdateSet' (all :: # Type) (updated :: # Type) =
        , deleteActions :: List { path :: Path all, subset :: AttributeValue }
        }
 
-type BuilderSt =
-  { names :: Map String String
-  , values :: Map String AttributeValue
-  , valueCtr :: Int
-  }
-
-type BuilderF a = State BuilderSt a
+derive newtype instance updateSetSemigroup :: Semigroup (UpdateSet' all updated)
+derive newtype instance updateSetMonoid :: Monoid (UpdateSet' all updated)
 
 buildParams ::
   forall all updated.
   (UpdateSet' all () -> UpdateSet' all updated) ->
-  UpdateSet all
-buildParams f =
-  US { expression:
-       if String.null expr
-       then Nothing
-       else Just expr
-     , attributeNames:
-       if Map.isEmpty finalSt.names
-       then Nothing
-       else Just $ mapToObject finalSt.names
-     , attributeValues:
-       if Map.isEmpty finalSt.values
-       then Nothing
-       else Just $ mapToObject finalSt.values
-     }
+  CommandBuilder String
+buildParams f = do
+  setParts <- traverse addSetAction setActions
+  removeParts <- traverse addRemoveAction removeActions
+  addParts <- traverse addAddAction addActions
+  deleteParts <- traverse addDeleteAction deleteActions
+  pure $ Array.intercalate " "
+    $ Array.catMaybes
+    [ mkPart "SET" setParts
+    , mkPart "REMOVE" removeParts
+    , mkPart "ADD" addParts
+    , mkPart "DELETE" deleteParts
+    ]
 
   where
     USet { setActions, removeActions, addActions, deleteActions }
-      = f ( USet { setActions: mempty
-                 , removeActions: mempty
-                 , addActions: mempty
-                 , deleteActions: mempty
-                 }
-          )
-
-    res :: Tuple String BuilderSt
-    res = runState addAllActions
-      { names: mempty
-      , values: mempty
-      , valueCtr: 0
-      }
-    expr = fst res
-    finalSt = snd res
-
-    addAllActions :: BuilderF String
-    addAllActions = do
-      setParts <- traverse addSetAction setActions
-      removeParts <- traverse addRemoveAction removeActions
-      addParts <- traverse addAddAction addActions
-      deleteParts <- traverse addDeleteAction deleteActions
-      pure $ Array.intercalate " "
-        $ Array.catMaybes
-        [ mkPart "SET" setParts
-        , mkPart "REMOVE" removeParts
-        , mkPart "ADD" addParts
-        , mkPart "DELETE" deleteParts
-        ]
+      = f mempty
 
     addSetAction { path, value } = do
-      nameStr <- addName path
+      nameStr <- addPath path
       valueStr <- runExists addSetValue value
       pure $ nameStr <> " = " <> valueStr
 
-    addSetValue :: forall a. SetValue all a -> BuilderF String
+    addSetValue :: forall a. SetValue all a -> CommandBuilder String
     addSetValue (SVOperand op) = addOperand op
     addSetValue (SVPlus op1 op2) = do
       op1Str <- addOperand op1
@@ -137,11 +100,11 @@ buildParams f =
       op2Str <- addOperand op2
       pure $ op1Str <> " - " <> op2Str
 
-    addOperand :: forall a. Operand all a -> BuilderF String
-    addOperand (OPath p) = addName p
-    addOperand (OValue av) = addValue av
+    addOperand :: forall a. Operand all a -> CommandBuilder String
+    addOperand (OPath p) = addPath p
+    addOperand (OValue av) = CmdB.addValue av
     addOperand (OIfNotExists p op) = do
-      nameStr <- addName p
+      nameStr <- addPath p
       opStr <- addOperand op
       pure $ "if_not_exists(" <> nameStr <> ", " <> opStr <> ")"
     addOperand (OListAppend op1 op2) = do
@@ -149,34 +112,19 @@ buildParams f =
       op2Str <- addOperand op2
       pure $ "list_append(" <> op1Str <> ", " <> op2Str <> ")"
 
-    addRemoveAction = addName
+    addRemoveAction = addPath
 
     addAddAction { path, value } = do
-      nameStr <- addName path
-      valueStr <- addValue value
+      nameStr <- addPath path
+      valueStr <- CmdB.addValue value
       pure $ nameStr <> " " <> valueStr
 
     addDeleteAction { path, subset } = do
-      nameStr <- addName path
-      subsetStr <- addValue subset
+      nameStr <- addPath path
+      subsetStr <- CmdB.addValue subset
       pure $ nameStr <> " " <> subsetStr
 
-    addName :: Path all -> BuilderF String
-    addName (Path s) = modify addName' $> key
-      where
-        key = "#" <> s
-        addName' p = p { names = Map.insert key s p.names }
-
-    addValue :: AttributeValue -> BuilderF String
-    addValue av = StateT $ addValue'
-      where
-        addValue' p = pure $ Tuple name p'
-          where
-            p' = p { valueCtr = p.valueCtr + 1
-                   , values = Map.insert name av p.values
-                   }
-
-            name = ":v" <> show p.valueCtr
+    addPath (Path s) = CmdB.addName s
 
     mkPart prefix Nil = Nothing
     mkPart prefix l = Just $ prefix <> " " <> intercalate ", " l
