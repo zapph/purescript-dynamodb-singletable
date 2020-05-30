@@ -8,6 +8,7 @@ module AWS.DynamoDB.SingleTable
        , deleteItem
        , putItem_
        , updateItem
+       , queryPkBySkPrefix
        ) where
 
 import Prelude
@@ -73,6 +74,7 @@ getItem { pk, sk } (Db { dynamodb, table }) =
     getRawItem =
       uorToMaybe <<< _."Item" <$> toAffE (_getItem dynamodb params)
 
+
 deleteItem
   :: forall a
      . ItemCodec (Item a)
@@ -135,6 +137,35 @@ updateItem f {pk, sk} (Db {dynamodb, table}) = do
       , "ReturnValues": stringLit :: _ "ALL_NEW"
       }
 
+queryPkBySkPrefix ::
+  forall a.
+  ItemCodec (Item a) =>
+  String ->
+  String ->
+  SingleTableDb ->
+  Aff (Array (Item a))
+queryPkBySkPrefix pk skPrefix (Db { dynamodb, table }) =
+  queryRawItems >>= traverse readItemOrErr
+
+  where
+    queryRawItems =
+      _."Items" <$> toAffE (_query dynamodb (coerce params))
+
+    params =
+      { "TableName": table
+      , "FilterExpression": "#pk = :pk and begins_with(#sk, :skPrefix)"
+      , "ExpressionAttributeNames": Object.fromHomogeneous
+        { "#pk": "pk"
+        , "#sk": "sk"
+        }
+      , "ExpressionAttributeValues": Object.fromHomogeneous
+        { ":pk": avS pk
+        , ":skPrefix": avS skPrefix
+        }
+      }
+
+-- Utils
+
 require ::
   forall a.
   String ->
@@ -180,6 +211,33 @@ foreign import _getItem
         , "TableName" :: String
         }
      -> Effect (Promise { "Item" :: UndefinedOr (Object AttributeValue) })
+
+foreign import _query
+  :: AWSDynamoDb
+     -> { "TableName" :: String
+        , "ConsistentRead" :: UndefinedOr Boolean
+        , "ExclusiveStartKey" :: UndefinedOr String
+        , "ExpressionAttributeNames" :: UndefinedOr (Object String)
+        , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
+        , "FilterExpression" :: UndefinedOr String
+        , "IndexName" :: UndefinedOr String
+        , "KeyConditionExpression" :: UndefinedOr String
+        , "Limit" :: UndefinedOr Int
+        , "ProjectionExpression" :: UndefinedOr String
+        , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
+        , "ScanIndexForward" :: UndefinedOr Boolean
+        , "Select" :: UndefinedOr (StringLit "ALL_ATTRIBUTES" |+| StringLit "ALL_PROJECTED_ATTRIBUTES" |+| StringLit "COUNT" |+| StringLit "SPECIFIC_ATTRIBUTES")
+        }
+     -> Effect
+     ( Promise
+       { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+       , "Count" :: Int
+       , "Items" :: Array (Object AttributeValue)
+       , "LastEvaluatedKey" :: UndefinedOr String
+       , "ScannedCount" :: Int
+       }
+     )
+
 
 foreign import _deleteItem
   :: AWSDynamoDb
