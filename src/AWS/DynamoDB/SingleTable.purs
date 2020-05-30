@@ -153,7 +153,7 @@ queryPkBySkPrefix pk skPrefix (Db { dynamodb, table }) =
 
     params =
       { "TableName": table
-      , "FilterExpression": "#pk = :pk and begins_with(#sk, :skPrefix)"
+      , "KeyConditionExpression": "#pk = :pk and begins_with(#sk, :skPrefix)"
       , "ExpressionAttributeNames": Object.fromHomogeneous
         { "#pk": "pk"
         , "#sk": "sk"
