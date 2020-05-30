@@ -8,7 +8,11 @@ module AWS.DynamoDB.SingleTable
        , deleteItem
        , putItem_
        , updateItem
-       , queryPkBySkPrefix
+       , queryPrimaryBySkPrefix
+       , queryGsi1BySkPrefix
+       , queryGsi2BySkPrefix
+       , queryGsi3BySkPrefix
+       , queryGsiNBySkPrefix
        ) where
 
 import Prelude
@@ -137,14 +141,62 @@ updateItem f {pk, sk} (Db {dynamodb, table}) = do
       , "ReturnValues": stringLit :: _ "ALL_NEW"
       }
 
-queryPkBySkPrefix ::
+queryPrimaryBySkPrefix ::
   forall a.
   ItemCodec (Item a) =>
-  String ->
-  String ->
+  { pk :: String, skPrefix :: String } ->
   SingleTableDb ->
   Aff (Array (Item a))
-queryPkBySkPrefix pk skPrefix (Db { dynamodb, table }) =
+queryPrimaryBySkPrefix =
+  queryBySkPrefix
+  { pkPath: "pk", skPath: "sk" }
+
+queryGsi1BySkPrefix ::
+  forall a.
+  ItemCodec (Item a) =>
+  { pk :: String, skPrefix :: String } ->
+  SingleTableDb ->
+  Aff (Array (Item a))
+queryGsi1BySkPrefix =
+  queryGsiNBySkPrefix 1
+
+queryGsi2BySkPrefix ::
+  forall a.
+  ItemCodec (Item a) =>
+  { pk :: String, skPrefix :: String } ->
+  SingleTableDb ->
+  Aff (Array (Item a))
+queryGsi2BySkPrefix =
+  queryGsiNBySkPrefix 2
+
+queryGsi3BySkPrefix ::
+  forall a.
+  ItemCodec (Item a) =>
+  { pk :: String, skPrefix :: String } ->
+  SingleTableDb ->
+  Aff (Array (Item a))
+queryGsi3BySkPrefix =
+  queryGsiNBySkPrefix 3
+
+queryGsiNBySkPrefix ::
+  forall a.
+  ItemCodec (Item a) =>
+  Int ->
+  { pk :: String, skPrefix :: String } ->
+  SingleTableDb ->
+  Aff (Array (Item a))
+queryGsiNBySkPrefix n =
+  queryBySkPrefix
+  { pkPath: "gsi" <> show n <> "pk", skPath: "gsi" <> show n <> "sk" }
+
+queryBySkPrefix ::
+  forall a.
+  ItemCodec (Item a) =>
+  { pkPath :: String, skPath :: String } ->
+  { pk :: String, skPrefix :: String } ->
+  SingleTableDb ->
+  Aff (Array (Item a))
+queryBySkPrefix { pkPath, skPath } { pk, skPrefix } (Db { dynamodb, table }) =
   queryRawItems >>= traverse readItemOrErr
 
   where
@@ -155,8 +207,8 @@ queryPkBySkPrefix pk skPrefix (Db { dynamodb, table }) =
       { "TableName": table
       , "KeyConditionExpression": "#pk = :pk and begins_with(#sk, :skPrefix)"
       , "ExpressionAttributeNames": Object.fromHomogeneous
-        { "#pk": "pk"
-        , "#sk": "sk"
+        { "#pk": pkPath
+        , "#sk": skPath
         }
       , "ExpressionAttributeValues": Object.fromHomogeneous
         { ":pk": avS pk
