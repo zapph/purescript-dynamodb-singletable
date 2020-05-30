@@ -13,7 +13,8 @@ module AWS.DynamoDB.SingleTable
 import Prelude
 
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, AttributeValue, avS, readItem, writeItem)
-import AWS.DynamoDB.SingleTable.UpdateExpression (UpdateSet, updateSetAttributeNames, updateSetAttributeValues, updateSetExpression)
+import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
+import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Promise (Promise, toAffE)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (traverse)
@@ -109,26 +110,28 @@ putItem_ a (Db {dynamodb, table}) =
       }
 
 updateItem::
-  forall r.
+  forall r u.
   ItemCodec {|r} =>
-  UpdateSet r ->
+  (UE.UpdateSet' r () -> UE.UpdateSet' r u) ->
   PrimaryKey ->
   SingleTableDb ->
   Aff {|r}
-updateItem us {pk, sk} (Db {dynamodb, table}) = do
+updateItem f {pk, sk} (Db {dynamodb, table}) = do
   res <- toAffE $ _updateItem dynamodb (coerce params)
   require "Attributes" (uorToMaybe res."Attributes") >>= readItemOrErr
 
   where
+    { value: expr, attributeNames, attributeValues } = CmdB.build $ UE.buildParams f
+
     params =
       { "Key": Object.fromHomogeneous
         { "pk": avS pk
         , "sk": avS sk
         }
       , "TableName": table
-      , "UpdateExpression": maybeToUor (updateSetExpression us)
-      , "ExpressionAttributeNames": maybeToUor (updateSetAttributeNames us)
-      , "ExpressionAttributeValues": maybeToUor (updateSetAttributeValues us)
+      , "UpdateExpression": maybeToUor expr
+      , "ExpressionAttributeNames": maybeToUor attributeNames
+      , "ExpressionAttributeValues": maybeToUor attributeValues
       , "ReturnValues": stringLit :: _ "ALL_NEW"
       }
 

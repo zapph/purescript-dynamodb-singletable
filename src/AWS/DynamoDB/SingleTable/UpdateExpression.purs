@@ -1,9 +1,5 @@
 module AWS.DynamoDB.SingleTable.UpdateExpression
-       ( UpdateSet
-       , updateSetExpression
-       , updateSetAttributeNames
-       , updateSetAttributeValues
-       , UpdateSet'
+       ( UpdateSet'
        , buildParams
        , Path
        , SetValue
@@ -26,32 +22,22 @@ module AWS.DynamoDB.SingleTable.UpdateExpression
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, AttributeValue, Item, writeAV)
+import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, AttributeValue, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import Data.Array as Array
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
-import Data.FoldableWithIndex (traverseWithIndex_)
 import Data.List (List(..), (:))
-import Data.Map (Map)
 import Data.Maybe (Maybe(..))
 import Data.Set (Set)
+import Data.String as String
 import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
 import Data.Traversable (traverse)
-import Foreign.Object (Object)
-import Foreign.Object as Object
-import Foreign.Object.ST as ObjectST
 import Prim.Row as Row
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html
-
-newtype UpdateSet (all :: # Type) = US
-  { expression :: Maybe String
-  , attributeNames :: Maybe (Object String)
-  , attributeValues :: Maybe Item
-  }
 
 newtype UpdateSet' (all :: # Type) (updated :: # Type) =
   USet { setActions :: List { path :: Path all, value :: SetValueE all }
@@ -66,19 +52,22 @@ derive newtype instance updateSetMonoid :: Monoid (UpdateSet' all updated)
 buildParams ::
   forall all updated.
   (UpdateSet' all () -> UpdateSet' all updated) ->
-  CommandBuilder String
+  CommandBuilder (Maybe String)
 buildParams f = do
   setParts <- traverse addSetAction setActions
   removeParts <- traverse addRemoveAction removeActions
   addParts <- traverse addAddAction addActions
   deleteParts <- traverse addDeleteAction deleteActions
-  pure $ Array.intercalate " "
-    $ Array.catMaybes
-    [ mkPart "SET" setParts
-    , mkPart "REMOVE" removeParts
-    , mkPart "ADD" addParts
-    , mkPart "DELETE" deleteParts
-    ]
+  let expr =
+        Array.intercalate " " $ Array.catMaybes
+        [ mkPart "SET" setParts
+        , mkPart "REMOVE" removeParts
+        , mkPart "ADD" addParts
+        , mkPart "DELETE" deleteParts
+        ]
+  pure $ if String.null expr
+    then Nothing
+    else Just expr
 
   where
     USet { setActions, removeActions, addActions, deleteActions }
@@ -294,43 +283,6 @@ data USEntry =
   USSet { name :: String, value :: String }
   | USRemove String
 
-updateSetExpression :: forall a. UpdateSet a -> Maybe String
-updateSetExpression (US { expression }) = expression
-
-updateSetAttributeNames :: forall a. UpdateSet a -> Maybe (Object String)
-updateSetAttributeNames (US { attributeNames }) = attributeNames
-
-updateSetAttributeValues :: forall a. UpdateSet a -> Maybe Item
-updateSetAttributeValues (US { attributeValues }) = attributeValues
-
-formatCommands ::
-  { setCommands :: Array String
-  , removeCommands :: Array String
-  }
-  -> Maybe String
-formatCommands { setCommands, removeCommands } =
-  parts <#> Array.intercalate " "
-  where
-    parts = filterEmptyArray $ Array.catMaybes
-            [ mkPart "SET" setCommands
-            , mkPart "REMOVE" removeCommands
-            ]
-
-    mkPart prefix cmds = filterEmptyArray cmds <#> \c ->
-      prefix <> " " <> Array.intercalate ", " c
-
-filterEmpty :: forall f a. (f a -> Boolean) -> f a -> Maybe (f a)
-filterEmpty null as =
-  if null as
-  then Nothing
-  else Just as
-
-filterEmptyArray :: forall a. Array a -> Maybe (Array a)
-filterEmptyArray = filterEmpty Array.null
-
-filterEmptyObject :: forall a. Object a -> Maybe (Object a)
-filterEmptyObject = filterEmpty Object.isEmpty
-
 spToPath ::
   forall r _r v s.
   IsSymbol s =>
@@ -338,9 +290,3 @@ spToPath ::
   SProxy s ->
   Path r
 spToPath = Path <<< reflectSymbol
-
-mapToObject :: forall a. Map String a -> Object a
-mapToObject m = Object.runST do
-  o <- ObjectST.new
-  traverseWithIndex_ (\k v -> ObjectST.poke k v o) m
-  pure o
