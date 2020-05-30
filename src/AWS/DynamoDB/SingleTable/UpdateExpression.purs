@@ -3,6 +3,7 @@ module AWS.DynamoDB.SingleTable.UpdateExpression
        , buildParams
        , Path
        , SetValue
+       , setValue'
        , setValue
        , setValuePlus
        , setValueMinus
