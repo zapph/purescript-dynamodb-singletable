@@ -92,7 +92,7 @@ build (CB st) =
       valuesToObj' valueCtr values = Object.runST do
         obj <- STObject.new
         forWithIndex_ values \k v ->
-          STObject.poke (valKey $ valueCtr - k) v obj
+          STObject.poke (valKey $ valueCtr - k - 1) v obj
         pure obj
 
 nameKey :: String -> String
