@@ -3,6 +3,7 @@ module AWS.DynamoDB.SingleTable
        , PrimaryKey
        , Item
        , GSI1
+       , UpdateReturnValues(..)
        , mkSingleTableDb
        , getItem
        , deleteItem
@@ -29,7 +30,7 @@ import Effect.Exception (error)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Literals (StringLit, stringLit)
-import Untagged.Coercible (coerce)
+import Untagged.Coercible (class Coercible, coerce)
 import Untagged.Union (type (|+|), UndefinedOr, maybeToUor, uorToMaybe)
 
 newtype SingleTableDb =
@@ -115,14 +116,19 @@ putItem_ a (Db {dynamodb, table}) =
       , "TableName": table
       }
 
+data UpdateReturnValues =
+  URAllNew
+  | URAllOld
+
 updateItem::
   forall r u.
   ItemCodec {|r} =>
+  UpdateReturnValues ->
   (UE.UpdateSet' r () -> UE.UpdateSet' r u) ->
   PrimaryKey ->
   SingleTableDb ->
   Aff {|r}
-updateItem f {pk, sk} (Db {dynamodb, table}) = do
+updateItem retVals f {pk, sk} (Db {dynamodb, table}) = do
   res <- toAffE $ _updateItem dynamodb (coerce params)
   require "Attributes" (uorToMaybe res."Attributes") >>= readItemOrErr
 
@@ -138,8 +144,13 @@ updateItem f {pk, sk} (Db {dynamodb, table}) = do
       , "UpdateExpression": maybeToUor expr
       , "ExpressionAttributeNames": maybeToUor attributeNames
       , "ExpressionAttributeValues": maybeToUor attributeValues
-      , "ReturnValues": stringLit :: _ "ALL_NEW"
+      , "ReturnValues": case retVals of
+        URAllNew -> retValU (stringLit :: _ "ALL_NEW")
+        URAllOld -> retValU (stringLit :: _ "ALL_OLD")
       }
+
+    retValU :: forall a. Coercible a (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW") => a -> (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
+    retValU = coerce
 
 queryPrimaryBySkPrefix ::
   forall a.
