@@ -1,5 +1,6 @@
 module AWS.DynamoDB.SingleTable
-       ( Item
+       ( Item'
+       , Item
        , UpdateReturnValues(..)
        , mkSingleTableDb
        , getItem
@@ -11,6 +12,8 @@ module AWS.DynamoDB.SingleTable
        , queryGsi2BySkPrefix
        , queryGsi3BySkPrefix
        , queryGsiNBySkPrefix
+       , Repo
+       , mkRepo
        , module E
        ) where
 
@@ -37,7 +40,8 @@ import RIO (RIO)
 import Untagged.Coercible (class Coercible, coerce)
 import Untagged.Union (type (|+|), maybeToUor, uorToMaybe)
 
-type Item a = { pk :: String, sk :: String | a }
+type Item' a = ( pk :: String, sk :: String | a )
+type Item a = Record (Item' a)
 
 mkSingleTableDb :: String -> Effect SingleTableDb
 mkSingleTableDb table =
@@ -213,6 +217,44 @@ queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } = do
         , ":skPrefix": avS skPrefix
         }
       }
+
+-- Repo
+
+type Repo a =
+  { getItem ::
+       forall env.
+       HasSingleTableDb env =>
+       PrimaryKey ->
+       RIO env (Maybe {|a})
+  , deleteItem ::
+       forall env.
+       HasSingleTableDb env =>
+       PrimaryKey ->
+       RIO env (Maybe {|a})
+  , putItem_ ::
+       forall env.
+       HasSingleTableDb env =>
+       {|a} ->
+       RIO env Unit
+  , updateItem::
+      forall env u.
+      HasSingleTableDb env =>
+      UpdateReturnValues ->
+      (UE.UpdateSet' a () -> UE.UpdateSet' a u) ->
+      PrimaryKey ->
+      RIO env {|a}
+  }
+
+mkRepo ::
+  forall r.
+  ItemCodec (Item r) =>
+  Repo (Item' r)
+mkRepo =
+  { getItem: getItem
+  , deleteItem: deleteItem
+  , putItem_: putItem_
+  , updateItem: updateItem -- todo disallow updates of pk, sk
+  }
 
 -- Utils
 
