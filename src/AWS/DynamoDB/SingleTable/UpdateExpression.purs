@@ -1,7 +1,6 @@
 module AWS.DynamoDB.SingleTable.UpdateExpression
        ( UpdateSet'
        , buildParams
-       , Path
        , SetValue
        , setValue'
        , setValue
@@ -26,6 +25,7 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, AttributeValue, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
+import AWS.DynamoDB.SingleTable.Types (Path, pathToString, spToPath)
 import Data.Array as Array
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
@@ -33,7 +33,7 @@ import Data.List (List(..), (:))
 import Data.Maybe (Maybe(..))
 import Data.Set (Set)
 import Data.String as String
-import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
+import Data.Symbol (class IsSymbol, SProxy)
 import Data.Traversable (traverse)
 import Prim.Row as Row
 
@@ -114,12 +114,10 @@ buildParams f = do
       subsetStr <- CmdB.addValue subset
       pure $ nameStr <> " " <> subsetStr
 
-    addPath (Path s) = CmdB.addName s
+    addPath p = CmdB.addName (pathToString p)
 
     mkPart prefix Nil = Nothing
     mkPart prefix l = Just $ prefix <> " " <> intercalate ", " l
-
-newtype Path (r :: # Type) = Path String
 
 data SetValue (r :: # Type) (v :: Type) =
   SVOperand (Operand r v)
@@ -283,11 +281,3 @@ delete sp v (USet prev) =
 data USEntry =
   USSet { name :: String, value :: String }
   | USRemove String
-
-spToPath ::
-  forall r _r v s.
-  IsSymbol s =>
-  Row.Cons s v _r r =>
-  SProxy s ->
-  Path r
-spToPath = Path <<< reflectSymbol
