@@ -7,7 +7,7 @@ module AWS.DynamoDB.SingleTable.CommandBuilder
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.AttributeValue (AttributeValue)
+import AWS.DynamoDB.SingleTable.Types (AttributeValue)
 import Control.Monad.State (class MonadState, State, runState, state)
 import Data.FoldableWithIndex (forWithIndex_)
 import Data.List (List(..))

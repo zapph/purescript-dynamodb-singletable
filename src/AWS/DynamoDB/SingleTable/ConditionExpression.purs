@@ -18,10 +18,10 @@ module AWS.DynamoDB.SingleTable.ConditionExpression
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, AttributeValue, avS, writeAV)
+import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, avS, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CB
-import AWS.DynamoDB.SingleTable.Types (Path, pathToString, spToPath)
+import AWS.DynamoDB.SingleTable.Types (AttributeValue, Path, pathToString, spToPath)
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)

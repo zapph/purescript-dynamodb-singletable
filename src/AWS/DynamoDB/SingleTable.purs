@@ -1,10 +1,5 @@
 module AWS.DynamoDB.SingleTable
-       ( SingleTableDb
-       , PrimaryKey
-       , Item
-       , GSI1
-       , class HasSingleTableDb
-       , dbL
+       ( Item
        , UpdateReturnValues(..)
        , mkSingleTableDb
        , getItem
@@ -16,17 +11,20 @@ module AWS.DynamoDB.SingleTable
        , queryGsi2BySkPrefix
        , queryGsi3BySkPrefix
        , queryGsiNBySkPrefix
+       , module E
        ) where
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, AttributeValue, avS, readItem, writeItem)
+import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, readItem, writeItem)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AWSDynamoDb, AttributeValue, AVObject(..), PrimaryKey, SingleTableDb(..), dbL)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, dbL) as E
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
 import Control.Promise (Promise, toAffE)
-import Data.Lens (Lens', view)
+import Data.Lens (view)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (traverse)
 import Effect (Effect)
@@ -40,38 +38,12 @@ import RIO (RIO)
 import Untagged.Coercible (class Coercible, coerce)
 import Untagged.Union (type (|+|), UndefinedOr, maybeToUor, uorToMaybe)
 
-newtype SingleTableDb =
-  Db { dynamodb :: AWSDynamoDb
-     , table :: String
-     }
-
-type PrimaryKey =
-  { pk :: String
-  , sk :: String
-  }
-
-type GSI1 =
-  { gsi1pk :: String
-  , gsi1sk :: String
-  }
-
--- workaround for coercible not working on (Object AttributeValue)
-newtype AVObject = AVObject (Object AttributeValue)
-
-class HasSingleTableDb env where
-  dbL :: Lens' env SingleTableDb
-
-instance hasSingleTableDbId :: HasSingleTableDb SingleTableDb where
-  dbL = identity
-
 type Item a = { pk :: String, sk :: String | a }
 
 mkSingleTableDb :: String -> Effect SingleTableDb
 mkSingleTableDb table =
   newDynamoDb <#> \dynamodb ->
   Db { dynamodb, table }
-
-foreign import data AWSDynamoDb :: Type
 
 foreign import newDynamoDb :: Effect AWSDynamoDb
 

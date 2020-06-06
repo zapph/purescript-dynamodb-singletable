@@ -22,10 +22,10 @@ module AWS.DynamoDB.SingleTable.UpdateExpression
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, AttributeValue, writeAV)
+import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
-import AWS.DynamoDB.SingleTable.Types (Path, pathToString, spToPath)
+import AWS.DynamoDB.SingleTable.Types (AttributeValue, Path, pathToString, spToPath)
 import Data.Array as Array
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)

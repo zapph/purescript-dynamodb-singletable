@@ -2,6 +2,7 @@ module AWS.DynamoDB.SingleTable.AttributeValue where
 
 import Prelude
 
+import AWS.DynamoDB.SingleTable.Types (AttributeValue)
 import Data.DateTime (DateTime)
 import Data.Either (fromRight, hush)
 import Data.FoldableWithIndex (forWithIndex_)
@@ -24,17 +25,6 @@ import Record.Builder as RB
 import Type.Row.Homogeneous (class Homogeneous)
 import Type.RowList (RLProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
-
-foreign import data AttributeValue :: Type
-
-instance attributeValueShow :: Show AttributeValue where
-  show = jsonStringify
-
-instance attributeValueEq :: Eq AttributeValue where
-  eq = objEqual
-
-foreign import jsonStringify :: forall a. a -> String
-foreign import objEqual :: forall a. a -> a -> Boolean
 
 -- B
 -- An attribute of type Binary. For example:

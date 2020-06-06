@@ -1,13 +1,58 @@
 module AWS.DynamoDB.SingleTable.Types
-       ( Path
+       ( AWSDynamoDb
+       , SingleTableDb(..)
+       , class HasSingleTableDb
+       , dbL
+       , PrimaryKey
+       , GSI1
+       , AttributeValue
+       , AVObject(..)
+       , Path
        , spToPath
        , pathToString
        ) where
 
 import Prelude
 
+import AWS.DynamoDB.SingleTable.Utils (jsonStringify, objEqual)
+import Data.Lens (Lens')
 import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
+import Foreign.Object (Object)
 import Prim.Row as Row
+
+foreign import data AWSDynamoDb :: Type
+
+newtype SingleTableDb =
+  Db { dynamodb :: AWSDynamoDb
+     , table :: String
+     }
+
+type PrimaryKey =
+  { pk :: String
+  , sk :: String
+  }
+
+type GSI1 =
+  { gsi1pk :: String
+  , gsi1sk :: String
+  }
+
+foreign import data AttributeValue :: Type
+
+instance attributeValueShow :: Show AttributeValue where
+  show = jsonStringify
+
+instance attributeValueEq :: Eq AttributeValue where
+  eq = objEqual
+
+-- workaround for coercible not working on (Object AttributeValue)
+newtype AVObject = AVObject (Object AttributeValue)
+
+class HasSingleTableDb env where
+  dbL :: Lens' env SingleTableDb
+
+instance hasSingleTableDbId :: HasSingleTableDb SingleTableDb where
+  dbL = identity
 
 newtype Path (r :: # Type) = Path String
 
