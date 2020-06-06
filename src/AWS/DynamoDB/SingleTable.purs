@@ -75,12 +75,12 @@ foreign import data AWSDynamoDb :: Type
 
 foreign import newDynamoDb :: Effect AWSDynamoDb
 
-getItem
-  :: forall env a
-     . HasSingleTableDb env
-     => ItemCodec (Item a)
-     => PrimaryKey
-     -> RIO env (Maybe (Item a))
+getItem ::
+  forall env a.
+  HasSingleTableDb env =>
+  ItemCodec (Item a) =>
+  PrimaryKey ->
+  RIO env (Maybe (Item a))
 getItem { pk, sk } = do
   table <- getTable
   res <- _getItem
@@ -111,7 +111,7 @@ deleteItem { pk, sk } = do
   traverse readItemOrErr (uorToMaybe (res."Attributes"))
 
 putItem_ ::
-    forall env a.
+  forall env a.
   HasSingleTableDb env =>
   ItemCodec (Item a) =>
   Item a ->
