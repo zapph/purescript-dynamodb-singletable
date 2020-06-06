@@ -1,6 +1,6 @@
 module AWS.DynamoDB.SingleTable
-       ( Item'
-       , Item
+       ( STDbItem'
+       , STDbItem
        , UpdateReturnValues(..)
        , mkSingleTableDb
        , getItem
@@ -40,8 +40,8 @@ import RIO (RIO)
 import Untagged.Coercible (class Coercible, coerce)
 import Untagged.Union (type (|+|), maybeToUor, uorToMaybe)
 
-type Item' a = ( pk :: String, sk :: String | a )
-type Item a = Record (Item' a)
+type STDbItem' a = ( pk :: String, sk :: String | a )
+type STDbItem a = Record (STDbItem' a)
 
 mkSingleTableDb :: String -> Effect SingleTableDb
 mkSingleTableDb table =
@@ -51,9 +51,9 @@ mkSingleTableDb table =
 getItem ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (Item a) =>
+  ItemCodec (STDbItem a) =>
   PrimaryKey ->
-  RIO env (Maybe (Item a))
+  RIO env (Maybe (STDbItem a))
 getItem { pk, sk } = do
   table <- getTable
   res <- Cl.getItem
@@ -68,9 +68,9 @@ getItem { pk, sk } = do
 deleteItem ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (Item a) =>
+  ItemCodec (STDbItem a) =>
   PrimaryKey ->
-  RIO env (Maybe (Item a))
+  RIO env (Maybe (STDbItem a))
 deleteItem { pk, sk } = do
   table <- getTable
   res <- Cl.deleteItem
@@ -86,8 +86,8 @@ deleteItem { pk, sk } = do
 putItem_ ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (Item a) =>
-  Item a ->
+  ItemCodec (STDbItem a) =>
+  STDbItem a ->
   RIO env Unit
 putItem_ a = do
   table <- getTable
@@ -136,9 +136,9 @@ updateItem retVals f {pk, sk} = do
 queryPrimaryBySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (Item a) =>
+  ItemCodec (STDbItem a) =>
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (Item a))
+  RIO env (Array (STDbItem a))
 queryPrimaryBySkPrefix =
   queryBySkPrefix
   { pkPath: "pk"
@@ -149,37 +149,37 @@ queryPrimaryBySkPrefix =
 queryGsi1BySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (Item a) =>
+  ItemCodec (STDbItem a) =>
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (Item a))
+  RIO env (Array (STDbItem a))
 queryGsi1BySkPrefix =
   queryGsiNBySkPrefix 1
 
 queryGsi2BySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (Item a) =>
+  ItemCodec (STDbItem a) =>
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (Item a))
+  RIO env (Array (STDbItem a))
 queryGsi2BySkPrefix =
   queryGsiNBySkPrefix 2
 
 queryGsi3BySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (Item a) =>
+  ItemCodec (STDbItem a) =>
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (Item a))
+  RIO env (Array (STDbItem a))
 queryGsi3BySkPrefix =
   queryGsiNBySkPrefix 3
 
 queryGsiNBySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (Item a) =>
+  ItemCodec (STDbItem a) =>
   Int ->
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (Item a))
+  RIO env (Array (STDbItem a))
 queryGsiNBySkPrefix n =
   queryBySkPrefix
   { pkPath: "gsi" <> n' <> "pk"
@@ -192,10 +192,10 @@ queryGsiNBySkPrefix n =
 queryBySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (Item a) =>
+  ItemCodec (STDbItem a) =>
   { pkPath :: String, skPath :: String, indexName :: Maybe String } ->
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (Item a))
+  RIO env (Array (STDbItem a))
 queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } = do
   table <- getTable
   queryRawItems table >>= traverse readItemOrErr
@@ -247,8 +247,8 @@ type Repo a =
 
 mkRepo ::
   forall r.
-  ItemCodec (Item r) =>
-  Repo (Item' r)
+  ItemCodec (STDbItem r) =>
+  Repo (STDbItem' r)
 mkRepo =
   { getItem: getItem
   , deleteItem: deleteItem
