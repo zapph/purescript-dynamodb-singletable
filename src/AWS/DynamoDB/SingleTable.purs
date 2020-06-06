@@ -77,7 +77,7 @@ getItem { pk, sk } (Db { dynamodb, table }) = do
       , "TableName": table
       }
     getRawItem =
-      uorToMaybe <<< _."Item" <$> toAffE (_getItem dynamodb params)
+      uorToMaybe <<< _."Item" <$> _getItem dynamodb params
 
 
 deleteItem
@@ -99,7 +99,7 @@ deleteItem { pk, sk } (Db { dynamodb, table }) =
       , "ReturnValues": stringLit :: _ "ALL_OLD"
       }
     deleteRawItem =
-      uorToMaybe <<< _."Attributes" <$> toAffE (_deleteItem dynamodb (coerce params))
+      uorToMaybe <<< _."Attributes" <$> _deleteItem dynamodb (coerce params)
 
 
 putItem_
@@ -109,7 +109,7 @@ putItem_
      -> SingleTableDb
      -> Aff Unit
 putItem_ a (Db {dynamodb, table}) =
-  void $ toAffE $ _putItem dynamodb (coerce params)
+  void $ _putItem dynamodb (coerce params)
   where
     params =
       { "Item": writeItem a
@@ -129,7 +129,7 @@ updateItem::
   SingleTableDb ->
   Aff {|r}
 updateItem retVals f {pk, sk} (Db {dynamodb, table}) = do
-  res <- toAffE $ _updateItem dynamodb (coerce params)
+  res <- _updateItem dynamodb (coerce params)
   require "Attributes" (uorToMaybe res."Attributes") >>= readItemOrErr
 
   where
@@ -220,7 +220,7 @@ queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } (Db { dynamodb, t
 
   where
     queryRawItems =
-      _."Items" <$> toAffE (_query dynamodb (coerce params))
+      _."Items" <$> _query dynamodb (coerce params)
 
     params =
       { "TableName": table
@@ -277,19 +277,12 @@ type ItemCollectionMetrics =
   , "SizeEstimateRangeGB" :: Array Number
   }
 
-foreign import _callDbFn ::
-  forall params res.
-  String ->
-  AWSDynamoDb ->
-  params ->
-  Effect (Promise res)
-
 _getItem ::
   AWSDynamoDb ->
   { "Key" :: Object AttributeValue
   , "TableName" :: String
   } ->
-  Effect (Promise { "Item" :: UndefinedOr (Object AttributeValue) })
+  Aff { "Item" :: UndefinedOr (Object AttributeValue) }
 _getItem = _callDbFn "getItem"
 
 _query ::
@@ -308,14 +301,12 @@ _query ::
   , "ScanIndexForward" :: UndefinedOr Boolean
   , "Select" :: UndefinedOr (StringLit "ALL_ATTRIBUTES" |+| StringLit "ALL_PROJECTED_ATTRIBUTES" |+| StringLit "COUNT" |+| StringLit "SPECIFIC_ATTRIBUTES")
   } ->
-  Effect ( Promise
-           { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
-           , "Count" :: Int
-           , "Items" :: Array (Object AttributeValue)
-           , "LastEvaluatedKey" :: UndefinedOr String
-           , "ScannedCount" :: Int
-           }
-         )
+  Aff { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+      , "Count" :: Int
+      , "Items" :: Array (Object AttributeValue)
+      , "LastEvaluatedKey" :: UndefinedOr String
+      , "ScannedCount" :: Int
+      }
 _query = _callDbFn "query"
 
 _deleteItem ::
@@ -324,7 +315,7 @@ _deleteItem ::
   , "TableName" :: String
   , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
   } ->
-  Effect (Promise { "Attributes" :: UndefinedOr (Object AttributeValue) })
+  Aff { "Attributes" :: UndefinedOr (Object AttributeValue) }
 _deleteItem = _callDbFn "deleteItem"
 
 _putItem ::
@@ -338,11 +329,10 @@ _putItem ::
   , "ReturnItemCollectionMetrics" :: UndefinedOr (StringLit "SIZE" |+| StringLit "NONE")
   , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
   } ->
-  Effect (Promise
-          { "Attributes" :: UndefinedOr (Object AttributeValue)
-          , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
-          , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
-          })
+  Aff { "Attributes" :: UndefinedOr (Object AttributeValue)
+      , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+      , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
+      }
 _putItem = _callDbFn "putItem"
 
 _updateItem ::
@@ -358,8 +348,26 @@ _updateItem ::
   , "UpdateExpression" :: UndefinedOr String
 
   } ->
-  Effect (Promise { "Attributes" :: UndefinedOr (Object AttributeValue)
-                  , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
-                  , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
-                  })
+  Aff { "Attributes" :: UndefinedOr (Object AttributeValue)
+      , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+      , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
+      }
 _updateItem = _callDbFn "updateItem"
+
+-- FFI
+
+foreign import _callDbFnEffP ::
+  forall params res.
+  String ->
+  AWSDynamoDb ->
+  params ->
+  Effect (Promise res)
+
+_callDbFn ::
+  forall params res.
+  String ->
+  AWSDynamoDb ->
+  params ->
+  Aff res
+_callDbFn fnName db params =
+  toAffE $ _callDbFnEffP fnName db params
