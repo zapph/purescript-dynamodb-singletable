@@ -3,6 +3,8 @@ module AWS.DynamoDB.SingleTable
        , PrimaryKey
        , Item
        , GSI1
+       , class HasSingleTableDb
+       , dbL
        , UpdateReturnValues(..)
        , mkSingleTableDb
        , getItem
@@ -21,15 +23,20 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, AttributeValue, avS, readItem, writeItem)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
+import Control.Monad.Error.Class (class MonadThrow)
+import Control.Monad.Reader (ask)
 import Control.Promise (Promise, toAffE)
+import Data.Lens (Lens', view)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (traverse)
 import Effect (Effect)
-import Effect.Aff (Aff, throwError)
-import Effect.Exception (error)
+import Effect.Aff (throwError)
+import Effect.Aff.Class (liftAff)
+import Effect.Exception (Error, error)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Literals (StringLit, stringLit)
+import RIO (RIO)
 import Untagged.Coercible (class Coercible, coerce)
 import Untagged.Union (type (|+|), UndefinedOr, maybeToUor, uorToMaybe)
 
@@ -48,6 +55,15 @@ type GSI1 =
   , gsi1sk :: String
   }
 
+-- workaround for coercible not working on (Object AttributeValue)
+newtype AVObject = AVObject (Object AttributeValue)
+
+class HasSingleTableDb env where
+  dbL :: Lens' env SingleTableDb
+
+instance hasSingleTableDbId :: HasSingleTableDb SingleTableDb where
+  dbL = identity
+
 type Item a = { pk :: String, sk :: String | a }
 
 mkSingleTableDb :: String -> Effect SingleTableDb
@@ -60,82 +76,74 @@ foreign import data AWSDynamoDb :: Type
 foreign import newDynamoDb :: Effect AWSDynamoDb
 
 getItem
-  :: forall a
-     . ItemCodec (Item a)
+  :: forall env a
+     . HasSingleTableDb env
+     => ItemCodec (Item a)
      => PrimaryKey
-     -> SingleTableDb
-     -> Aff (Maybe (Item a))
-getItem { pk, sk } (Db { dynamodb, table }) = do
-  getRawItem >>= traverse readItemOrErr
-
-  where
-    params =
-      { "Key": Object.fromHomogeneous
+     -> RIO env (Maybe (Item a))
+getItem { pk, sk } = do
+  table <- getTable
+  res <- _getItem
+    { "Key": AVObject $ Object.fromHomogeneous
         { "pk": avS pk
         , "sk": avS sk
         }
-      , "TableName": table
-      }
-    getRawItem =
-      uorToMaybe <<< _."Item" <$> _getItem dynamodb params
+    , "TableName": table
+    }
+  traverse readItemOrErr (uorToMaybe (res."Item"))
 
-
-deleteItem
-  :: forall a
-     . ItemCodec (Item a)
-     => PrimaryKey
-     -> SingleTableDb
-     -> Aff (Maybe (Item a))
-deleteItem { pk, sk } (Db { dynamodb, table }) =
-  deleteRawItem >>= traverse readItemOrErr
-
-  where
-    params =
-      { "Key": Object.fromHomogeneous
+deleteItem ::
+  forall env a.
+  HasSingleTableDb env =>
+  ItemCodec (Item a) =>
+  PrimaryKey ->
+  RIO env (Maybe (Item a))
+deleteItem { pk, sk } = do
+  table <- getTable
+  res <- _deleteItem
+    { "Key": AVObject $ Object.fromHomogeneous
         { "pk": avS pk
         , "sk": avS sk
         }
-      , "TableName": table
-      , "ReturnValues": stringLit :: _ "ALL_OLD"
-      }
-    deleteRawItem =
-      uorToMaybe <<< _."Attributes" <$> _deleteItem dynamodb (coerce params)
+    , "TableName": table
+    , "ReturnValues": stringLit :: _ "ALL_OLD"
+    }
+  traverse readItemOrErr (uorToMaybe (res."Attributes"))
 
-
-putItem_
-  :: forall a
-     . ItemCodec (Item a)
-     => Item a
-     -> SingleTableDb
-     -> Aff Unit
-putItem_ a (Db {dynamodb, table}) =
-  void $ _putItem dynamodb (coerce params)
-  where
-    params =
-      { "Item": writeItem a
-      , "TableName": table
-      }
+putItem_ ::
+    forall env a.
+  HasSingleTableDb env =>
+  ItemCodec (Item a) =>
+  Item a ->
+  RIO env Unit
+putItem_ a = do
+  table <- getTable
+  void $ _putItem
+    { "Item": writeItem a
+    , "TableName": table
+    }
 
 data UpdateReturnValues =
   URAllNew
   | URAllOld
 
 updateItem::
-  forall r u.
+  forall env r u.
+  HasSingleTableDb env =>
   ItemCodec {|r} =>
   UpdateReturnValues ->
   (UE.UpdateSet' r () -> UE.UpdateSet' r u) ->
   PrimaryKey ->
-  SingleTableDb ->
-  Aff {|r}
-updateItem retVals f {pk, sk} (Db {dynamodb, table}) = do
-  res <- _updateItem dynamodb (coerce params)
+  RIO env {|r}
+updateItem retVals f {pk, sk} = do
+  table <- getTable
+  res <- _updateItem (params table)
   require "Attributes" (uorToMaybe res."Attributes") >>= readItemOrErr
 
   where
     { value: expr, attributeNames, attributeValues } = CmdB.build $ UE.buildParams f
 
-    params =
+    params table =
       { "Key": Object.fromHomogeneous
         { "pk": avS pk
         , "sk": avS sk
@@ -153,11 +161,11 @@ updateItem retVals f {pk, sk} (Db {dynamodb, table}) = do
     retValU = coerce
 
 queryPrimaryBySkPrefix ::
-  forall a.
+  forall env a.
+  HasSingleTableDb env =>
   ItemCodec (Item a) =>
   { pk :: String, skPrefix :: String } ->
-  SingleTableDb ->
-  Aff (Array (Item a))
+  RIO env (Array (Item a))
 queryPrimaryBySkPrefix =
   queryBySkPrefix
   { pkPath: "pk"
@@ -166,39 +174,39 @@ queryPrimaryBySkPrefix =
   }
 
 queryGsi1BySkPrefix ::
-  forall a.
+  forall env a.
+  HasSingleTableDb env =>
   ItemCodec (Item a) =>
   { pk :: String, skPrefix :: String } ->
-  SingleTableDb ->
-  Aff (Array (Item a))
+  RIO env (Array (Item a))
 queryGsi1BySkPrefix =
   queryGsiNBySkPrefix 1
 
 queryGsi2BySkPrefix ::
-  forall a.
+  forall env a.
+  HasSingleTableDb env =>
   ItemCodec (Item a) =>
   { pk :: String, skPrefix :: String } ->
-  SingleTableDb ->
-  Aff (Array (Item a))
+  RIO env (Array (Item a))
 queryGsi2BySkPrefix =
   queryGsiNBySkPrefix 2
 
 queryGsi3BySkPrefix ::
-  forall a.
+  forall env a.
+  HasSingleTableDb env =>
   ItemCodec (Item a) =>
   { pk :: String, skPrefix :: String } ->
-  SingleTableDb ->
-  Aff (Array (Item a))
+  RIO env (Array (Item a))
 queryGsi3BySkPrefix =
   queryGsiNBySkPrefix 3
 
 queryGsiNBySkPrefix ::
-  forall a.
+  forall env a.
+  HasSingleTableDb env =>
   ItemCodec (Item a) =>
   Int ->
   { pk :: String, skPrefix :: String } ->
-  SingleTableDb ->
-  Aff (Array (Item a))
+  RIO env (Array (Item a))
 queryGsiNBySkPrefix n =
   queryBySkPrefix
   { pkPath: "gsi" <> n' <> "pk"
@@ -209,20 +217,21 @@ queryGsiNBySkPrefix n =
     n' = show n
 
 queryBySkPrefix ::
-  forall a.
+  forall env a.
+  HasSingleTableDb env =>
   ItemCodec (Item a) =>
   { pkPath :: String, skPath :: String, indexName :: Maybe String } ->
   { pk :: String, skPrefix :: String } ->
-  SingleTableDb ->
-  Aff (Array (Item a))
-queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } (Db { dynamodb, table }) =
-  queryRawItems >>= traverse readItemOrErr
+  RIO env (Array (Item a))
+queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } = do
+  table <- getTable
+  queryRawItems table >>= traverse readItemOrErr
 
   where
-    queryRawItems =
-      _."Items" <$> _query dynamodb (coerce params)
+    queryRawItems table =
+      _."Items" <$> _query (params table)
 
-    params =
+    params table =
       { "TableName": table
       , "IndexName": maybeToUor indexName
       , "KeyConditionExpression": "#pk = :pk and begins_with(#sk, :skPrefix)"
@@ -239,22 +248,23 @@ queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } (Db { dynamodb, t
 -- Utils
 
 require ::
-  forall a.
+  forall m a.
+  MonadThrow Error m =>
   String ->
   Maybe a ->
-  Aff a
+  m a
 require _ (Just a) = pure a
 require name Nothing = throwError $ error $ "did not find " <> name
 
 readItemOrErr ::
-  forall a.
+  forall m a.
+  MonadThrow Error m =>
   ItemCodec a =>
   Object AttributeValue ->
-  Aff a
+  m a
 readItemOrErr o = case readItem o of
   Just a -> pure a
   Nothing -> throwError $ error "unreadable item"
-
 
 type Capacity =
   { "CapacityUnits" :: UndefinedOr Number
@@ -277,16 +287,20 @@ type ItemCollectionMetrics =
   , "SizeEstimateRangeGB" :: Array Number
   }
 
-_getItem ::
-  AWSDynamoDb ->
-  { "Key" :: Object AttributeValue
+type GetItemReq =
+  { "Key" :: AVObject
   , "TableName" :: String
-  } ->
-  Aff { "Item" :: UndefinedOr (Object AttributeValue) }
+  }
+
+_getItem ::
+  forall env req.
+  HasSingleTableDb env =>
+  Coercible req GetItemReq =>
+  req ->
+  RIO env { "Item" :: UndefinedOr (Object AttributeValue) }
 _getItem = _callDbFn "getItem"
 
-_query ::
-  AWSDynamoDb ->
+type QueryReq =
   { "TableName" :: String
   , "ConsistentRead" :: UndefinedOr Boolean
   , "ExclusiveStartKey" :: UndefinedOr String
@@ -300,26 +314,36 @@ _query ::
   , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
   , "ScanIndexForward" :: UndefinedOr Boolean
   , "Select" :: UndefinedOr (StringLit "ALL_ATTRIBUTES" |+| StringLit "ALL_PROJECTED_ATTRIBUTES" |+| StringLit "COUNT" |+| StringLit "SPECIFIC_ATTRIBUTES")
-  } ->
-  Aff { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
-      , "Count" :: Int
-      , "Items" :: Array (Object AttributeValue)
-      , "LastEvaluatedKey" :: UndefinedOr String
-      , "ScannedCount" :: Int
-      }
+  }
+
+_query ::
+  forall env req.
+  HasSingleTableDb env =>
+  Coercible req QueryReq =>
+  req ->
+  RIO env { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+          , "Count" :: Int
+          , "Items" :: Array (Object AttributeValue)
+          , "LastEvaluatedKey" :: UndefinedOr String
+          , "ScannedCount" :: Int
+          }
 _query = _callDbFn "query"
 
-_deleteItem ::
-  AWSDynamoDb ->
-  { "Key" :: Object AttributeValue
+type DeleteItemReq =
+  { "Key" :: AVObject
   , "TableName" :: String
   , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
-  } ->
-  Aff { "Attributes" :: UndefinedOr (Object AttributeValue) }
+  }
+
+_deleteItem ::
+  forall env req.
+  HasSingleTableDb env =>
+  Coercible req DeleteItemReq =>
+  req ->
+  RIO env { "Attributes" :: UndefinedOr (Object AttributeValue) }
 _deleteItem = _callDbFn "deleteItem"
 
-_putItem ::
-  AWSDynamoDb ->
+type PutItemReq =
   { "Item" :: Object AttributeValue
   , "TableName" :: String
   , "ConditionExpression" :: UndefinedOr String
@@ -328,15 +352,20 @@ _putItem ::
   , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
   , "ReturnItemCollectionMetrics" :: UndefinedOr (StringLit "SIZE" |+| StringLit "NONE")
   , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
-  } ->
-  Aff { "Attributes" :: UndefinedOr (Object AttributeValue)
-      , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
-      , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
-      }
+  }
+
+_putItem ::
+  forall env req.
+  HasSingleTableDb env =>
+  Coercible req PutItemReq =>
+  req ->
+  RIO env { "Attributes" :: UndefinedOr (Object AttributeValue)
+          , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+          , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
+          }
 _putItem = _callDbFn "putItem"
 
-_updateItem ::
-  AWSDynamoDb ->
+type UpdateItemReq =
   { "Key" :: Object AttributeValue
   , "TableName" :: String
   , "ConditionExpression" :: UndefinedOr String
@@ -346,12 +375,17 @@ _updateItem ::
   , "ReturnItemCollectionMetrics" :: UndefinedOr (StringLit "SIZE" |+| StringLit "NONE")
   , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
   , "UpdateExpression" :: UndefinedOr String
+  }
 
-  } ->
-  Aff { "Attributes" :: UndefinedOr (Object AttributeValue)
-      , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
-      , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
-      }
+_updateItem ::
+  forall env req.
+  HasSingleTableDb env =>
+  Coercible req UpdateItemReq =>
+  req ->
+  RIO env { "Attributes" :: UndefinedOr (Object AttributeValue)
+          , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+          , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
+          }
 _updateItem = _callDbFn "updateItem"
 
 -- FFI
@@ -363,11 +397,19 @@ foreign import _callDbFnEffP ::
   params ->
   Effect (Promise res)
 
+getTable ::
+  forall env.
+  HasSingleTableDb env =>
+  RIO env String
+getTable = ask <#> \e -> case view dbL e of
+  Db { table } -> table
+
 _callDbFn ::
-  forall params res.
+  forall env params res.
+  HasSingleTableDb env =>
   String ->
-  AWSDynamoDb ->
   params ->
-  Aff res
-_callDbFn fnName db params =
-  toAffE $ _callDbFnEffP fnName db params
+  RIO env res
+_callDbFn fnName params = do
+  Db { dynamodb } <- view dbL <$> ask
+  liftAff $ toAffE $ _callDbFnEffP fnName dynamodb params
