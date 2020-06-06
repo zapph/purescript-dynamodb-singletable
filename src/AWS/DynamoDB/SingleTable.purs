@@ -65,7 +65,7 @@ getItem
      => PrimaryKey
      -> SingleTableDb
      -> Aff (Maybe (Item a))
-getItem { pk, sk } (Db { dynamodb, table }) =
+getItem { pk, sk } (Db { dynamodb, table }) = do
   getRawItem >>= traverse readItemOrErr
 
   where
@@ -277,81 +277,89 @@ type ItemCollectionMetrics =
   , "SizeEstimateRangeGB" :: Array Number
   }
 
-foreign import _getItem
-  :: AWSDynamoDb
-     -> { "Key" :: Object AttributeValue
-        , "TableName" :: String
-        }
-     -> Effect (Promise { "Item" :: UndefinedOr (Object AttributeValue) })
+foreign import _callDbFn ::
+  forall params res.
+  String ->
+  AWSDynamoDb ->
+  params ->
+  Effect (Promise res)
 
-foreign import _query
-  :: AWSDynamoDb
-     -> { "TableName" :: String
-        , "ConsistentRead" :: UndefinedOr Boolean
-        , "ExclusiveStartKey" :: UndefinedOr String
-        , "ExpressionAttributeNames" :: UndefinedOr (Object String)
-        , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
-        , "FilterExpression" :: UndefinedOr String
-        , "IndexName" :: UndefinedOr String
-        , "KeyConditionExpression" :: UndefinedOr String
-        , "Limit" :: UndefinedOr Int
-        , "ProjectionExpression" :: UndefinedOr String
-        , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
-        , "ScanIndexForward" :: UndefinedOr Boolean
-        , "Select" :: UndefinedOr (StringLit "ALL_ATTRIBUTES" |+| StringLit "ALL_PROJECTED_ATTRIBUTES" |+| StringLit "COUNT" |+| StringLit "SPECIFIC_ATTRIBUTES")
-        }
-     -> Effect
-     ( Promise
-       { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
-       , "Count" :: Int
-       , "Items" :: Array (Object AttributeValue)
-       , "LastEvaluatedKey" :: UndefinedOr String
-       , "ScannedCount" :: Int
-       }
-     )
+_getItem ::
+  AWSDynamoDb ->
+  { "Key" :: Object AttributeValue
+  , "TableName" :: String
+  } ->
+  Effect (Promise { "Item" :: UndefinedOr (Object AttributeValue) })
+_getItem = _callDbFn "getItem"
 
+_query ::
+  AWSDynamoDb ->
+  { "TableName" :: String
+  , "ConsistentRead" :: UndefinedOr Boolean
+  , "ExclusiveStartKey" :: UndefinedOr String
+  , "ExpressionAttributeNames" :: UndefinedOr (Object String)
+  , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
+  , "FilterExpression" :: UndefinedOr String
+  , "IndexName" :: UndefinedOr String
+  , "KeyConditionExpression" :: UndefinedOr String
+  , "Limit" :: UndefinedOr Int
+  , "ProjectionExpression" :: UndefinedOr String
+  , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
+  , "ScanIndexForward" :: UndefinedOr Boolean
+  , "Select" :: UndefinedOr (StringLit "ALL_ATTRIBUTES" |+| StringLit "ALL_PROJECTED_ATTRIBUTES" |+| StringLit "COUNT" |+| StringLit "SPECIFIC_ATTRIBUTES")
+  } ->
+  Effect ( Promise
+           { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+           , "Count" :: Int
+           , "Items" :: Array (Object AttributeValue)
+           , "LastEvaluatedKey" :: UndefinedOr String
+           , "ScannedCount" :: Int
+           }
+         )
+_query = _callDbFn "query"
 
-foreign import _deleteItem
-  :: AWSDynamoDb
-     -> { "Key" :: Object AttributeValue
-        , "TableName" :: String
-        , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
-        }
-     -> Effect (Promise { "Attributes" :: UndefinedOr (Object AttributeValue) })
+_deleteItem ::
+  AWSDynamoDb ->
+  { "Key" :: Object AttributeValue
+  , "TableName" :: String
+  , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
+  } ->
+  Effect (Promise { "Attributes" :: UndefinedOr (Object AttributeValue) })
+_deleteItem = _callDbFn "deleteItem"
 
-foreign import _putItem
-  :: AWSDynamoDb
-     -> { "Item" :: Object AttributeValue
-        , "TableName" :: String
-        , "ConditionExpression" :: UndefinedOr String
-        , "ExpressionAttributeNames" :: UndefinedOr (Object String)
-        , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
-        , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
-        , "ReturnItemCollectionMetrics" :: UndefinedOr (StringLit "SIZE" |+| StringLit "NONE")
-        , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
-        }
-     -> Effect
-        ( Promise
+_putItem ::
+  AWSDynamoDb ->
+  { "Item" :: Object AttributeValue
+  , "TableName" :: String
+  , "ConditionExpression" :: UndefinedOr String
+  , "ExpressionAttributeNames" :: UndefinedOr (Object String)
+  , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
+  , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
+  , "ReturnItemCollectionMetrics" :: UndefinedOr (StringLit "SIZE" |+| StringLit "NONE")
+  , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
+  } ->
+  Effect (Promise
           { "Attributes" :: UndefinedOr (Object AttributeValue)
           , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
           , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
-          }
-        )
+          })
+_putItem = _callDbFn "putItem"
 
-foreign import _updateItem
-  :: AWSDynamoDb
-     -> { "Key" :: Object AttributeValue
-        , "TableName" :: String
-        , "ConditionExpression" :: UndefinedOr String
-        , "ExpressionAttributeNames" :: UndefinedOr (Object String)
-        , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
-        , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
-        , "ReturnItemCollectionMetrics" :: UndefinedOr (StringLit "SIZE" |+| StringLit "NONE")
-        , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
-        , "UpdateExpression" :: UndefinedOr String
+_updateItem ::
+  AWSDynamoDb ->
+  { "Key" :: Object AttributeValue
+  , "TableName" :: String
+  , "ConditionExpression" :: UndefinedOr String
+  , "ExpressionAttributeNames" :: UndefinedOr (Object String)
+  , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
+  , "ReturnConsumedCapacity" :: UndefinedOr (StringLit "INDEXES" |+| StringLit "TOTAL" |+| StringLit "NONE")
+  , "ReturnItemCollectionMetrics" :: UndefinedOr (StringLit "SIZE" |+| StringLit "NONE")
+  , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
+  , "UpdateExpression" :: UndefinedOr String
 
-        }
-     -> Effect (Promise { "Attributes" :: UndefinedOr (Object AttributeValue)
-                        , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
-                        , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
-                        })
+  } ->
+  Effect (Promise { "Attributes" :: UndefinedOr (Object AttributeValue)
+                  , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
+                  , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics
+                  })
+_updateItem = _callDbFn "updateItem"
