@@ -1,5 +1,5 @@
 module AWS.DynamoDB.SingleTable.UpdateExpression
-       ( UpdateSet'
+       ( Update
        , buildParams
        , SetValue
        , setValue'
@@ -26,39 +26,53 @@ import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.Types (AttributeValue, Path, pathToString, spToPath)
+import Control.Monad.State (class MonadState, State, StateT, execState, execStateT)
+import Control.Monad.State.Class (modify_)
+import Control.Monad.Trans.Class (lift)
 import Data.Array as Array
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
+import Data.FoldableWithIndex (forWithIndex_)
 import Data.List (List(..), (:))
+import Data.Map (Map)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Set (Set)
 import Data.String as String
 import Data.Symbol (class IsSymbol, SProxy)
-import Data.Traversable (traverse)
 import Prim.Row as Row
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html
 
-newtype UpdateSet' (all :: # Type) (updated :: # Type) =
-  USet { setActions :: List { path :: Path all, value :: SetValueE all }
-       , removeActions :: List (Path all)
-       , addActions :: List { path :: Path all, value :: AttributeValue }
-       , deleteActions :: List { path :: Path all, subset :: AttributeValue }
-       }
+data UpdateAction (r :: # Type) =
+  UASet (SetValueE r)
+  | UARemove
+  | UAAdd AttributeValue
+  | UADelete AttributeValue
 
-derive newtype instance updateSetSemigroup :: Semigroup (UpdateSet' all updated)
-derive newtype instance updateSetMonoid :: Monoid (UpdateSet' all updated)
+newtype Update (r :: # Type) a = Update (State (Map (Path r) (UpdateAction r)) a)
+
+derive newtype instance updateFunctor :: Functor (Update r)
+derive newtype instance updateApply :: Apply (Update r)
+derive newtype instance updateApplicative :: Applicative (Update r)
+derive newtype instance updateBind :: Bind (Update r)
+derive newtype instance updateMonad :: Monad (Update r)
+derive newtype instance updateMonadState :: MonadState (Map (Path r) (UpdateAction r)) (Update r)
+
+type BuilderF =
+  StateT { setParts :: List String
+         , removeParts :: List String
+         , addParts :: List String
+         , deleteParts :: List String
+         } CommandBuilder
 
 buildParams ::
-  forall all updated.
-  (UpdateSet' all () -> UpdateSet' all updated) ->
+  forall r.
+  Update r Unit ->
   CommandBuilder (Maybe String)
-buildParams f = do
-  setParts <- traverse addSetAction setActions
-  removeParts <- traverse addRemoveAction removeActions
-  addParts <- traverse addAddAction addActions
-  deleteParts <- traverse addDeleteAction deleteActions
+buildParams (Update u) =
+  execStateT as mempty <#> \ { setParts, removeParts, addParts, deleteParts } ->
   let expr =
         Array.intercalate " " $ Array.catMaybes
         [ mkPart "SET" setParts
@@ -66,20 +80,27 @@ buildParams f = do
         , mkPart "ADD" addParts
         , mkPart "DELETE" deleteParts
         ]
-  pure $ if String.null expr
+  in if String.null expr
     then Nothing
     else Just expr
 
   where
-    USet { setActions, removeActions, addActions, deleteActions }
-      = f mempty
+    actionMap = execState u mempty
 
-    addSetAction { path, value } = do
+    as = forWithIndex_ actionMap \path a -> do
       nameStr <- addPath path
-      valueStr <- runExists addSetValue value
-      pure $ nameStr <> " = " <> valueStr
+      case a of
+        UASet value -> addSetAction nameStr value
+        UARemove -> addRemoveAction nameStr
+        UAAdd v -> addAddAction nameStr v
+        UADelete subset -> addDeleteAction nameStr subset
 
-    addSetValue :: forall a. SetValue all a -> CommandBuilder String
+    addSetAction nameStr value = do
+      valueStr <- runExists addSetValue value
+      let a = nameStr <> " = " <> valueStr
+      modify_ (\p -> p { setParts = a : p.setParts })
+
+    addSetValue :: forall a. SetValue r a -> BuilderF String
     addSetValue (SVOperand op) = addOperand op
     addSetValue (SVPlus op1 op2) = do
       op1Str <- addOperand op1
@@ -90,9 +111,9 @@ buildParams f = do
       op2Str <- addOperand op2
       pure $ op1Str <> " - " <> op2Str
 
-    addOperand :: forall a. Operand all a -> CommandBuilder String
+    addOperand :: forall a. Operand r a -> BuilderF String
     addOperand (OPath p) = addPath p
-    addOperand (OValue av) = CmdB.addValue av
+    addOperand (OValue av) = addValue av
     addOperand (OIfNotExists p op) = do
       nameStr <- addPath p
       opStr <- addOperand op
@@ -102,19 +123,21 @@ buildParams f = do
       op2Str <- addOperand op2
       pure $ "list_append(" <> op1Str <> ", " <> op2Str <> ")"
 
-    addRemoveAction = addPath
+    addRemoveAction nameStr =
+      modify_ (\p -> p { removeParts = nameStr : p.removeParts })
 
-    addAddAction { path, value } = do
-      nameStr <- addPath path
-      valueStr <- CmdB.addValue value
-      pure $ nameStr <> " " <> valueStr
+    addAddAction nameStr value = do
+      valueStr <- addValue value
+      let a = nameStr <> " " <> valueStr
+      modify_ (\p -> p { addParts = nameStr : p.addParts })
 
-    addDeleteAction { path, subset } = do
-      nameStr <- addPath path
-      subsetStr <- CmdB.addValue subset
-      pure $ nameStr <> " " <> subsetStr
+    addDeleteAction nameStr subset = do
+      valueStr <- addValue subset
+      let a = nameStr <> " " <> valueStr
+      modify_ (\p -> p { deleteParts = nameStr : p.deleteParts })
 
-    addPath p = CmdB.addName (pathToString p)
+    addPath p = lift $ CmdB.addName (pathToString p)
+    addValue v = lift $ CmdB.addValue v
 
     mkPart prefix Nil = Nothing
     mkPart prefix l = Just $ prefix <> " " <> intercalate ", " l
@@ -196,38 +219,24 @@ class Settable typ v | typ -> v
 instance settableMaybe :: Settable (Maybe v) v
 else instance settableDirect :: Settable typ typ
 
-
 set ::
-  forall all _allPrev prev next pathK typ v.
-  IsSymbol pathK =>
-  Row.Lacks pathK prev =>
-  Row.Cons pathK typ prev next =>
-  Row.Cons pathK typ _allPrev all =>
+  forall r _r k typ v.
+  IsSymbol k =>
+  Row.Cons k typ _r r =>
   Settable typ v =>
   AVCodec v =>
-  SProxy pathK ->
-  SetValue all v ->
-  UpdateSet' all prev ->
-  UpdateSet' all next
-set sp sv (USet prev) =
-  USet $ prev { setActions = entry : prev.setActions }
-  where
-    entry = { path: spToPath sp
-            , value: mkExists sv
-            }
+  SProxy k ->
+  SetValue r v ->
+  Update r Unit
+set sp sv = addAction sp (UASet (mkExists sv))
 
 remove ::
-  forall all _allPrev prev next pathK v.
-  IsSymbol pathK =>
-  Row.Lacks pathK prev =>
-  Row.Cons pathK (Maybe v) prev next =>
-  Row.Cons pathK (Maybe v) _allPrev all =>
-  AVCodec v =>
-  SProxy pathK ->
-  UpdateSet' all prev ->
-  UpdateSet' all next
-remove sp (USet prev) =
-  USet $ prev { removeActions = spToPath sp : prev.removeActions }
+  forall r _r k v.
+  IsSymbol k =>
+  Row.Cons k (Maybe v) _r r =>
+  SProxy k ->
+  Update r Unit
+remove sp = addAction sp UARemove
 
 class Addable typ addend | typ -> addend
 instance addableNumber :: Addable Number Number
@@ -236,23 +245,15 @@ instance addableSet :: Addable (Set v) (Set v)
 instance addableMaybeSet :: Addable (Maybe (Set v)) (Set v)
 
 add ::
-  forall all _allPrev prev next pathK typ addend.
-  IsSymbol pathK =>
-  Row.Lacks pathK prev =>
-  Row.Cons pathK typ prev next =>
-  Row.Cons pathK typ _allPrev all =>
+  forall r _r k typ addend.
+  IsSymbol k =>
+  Row.Cons k typ _r r =>
   Addable typ addend =>
   AVCodec addend =>
-  SProxy pathK ->
+  SProxy k ->
   addend ->
-  UpdateSet' all prev ->
-  UpdateSet' all next
-add sp v (USet prev) =
-  USet $ prev { addActions =
-                   { path: spToPath sp
-                   , value: writeAV v
-                   } : prev.addActions
-              }
+  Update r Unit
+add sp v = addAction sp (UAAdd (writeAV v))
 
 class Deletable typ set | typ -> set
 
@@ -260,24 +261,23 @@ instance deletableSet :: Deletable (Set v) (Set v)
 instance deletableMaybeSet :: Deletable (Maybe (Set v)) (Set v)
 
 delete ::
-  forall all _allPrev prev next pathK typ set.
-  IsSymbol pathK =>
-  Row.Lacks pathK prev =>
-  Row.Cons pathK typ prev next =>
-  Row.Cons pathK typ _allPrev all =>
+  forall r _r k typ set.
+  IsSymbol k =>
+  Row.Cons k typ _r r =>
   Deletable typ set =>
   AVCodec set =>
-  SProxy pathK ->
+  SProxy k ->
   set ->
-  UpdateSet' all prev ->
-  UpdateSet' all next
-delete sp v (USet prev) =
-  USet $ prev { deleteActions =
-                   { path: spToPath sp
-                   , subset: writeAV v
-                   } : prev.deleteActions
-              }
+  Update r Unit
+delete sp v = addAction sp (UADelete (writeAV v))
 
-data USEntry =
-  USSet { name :: String, value :: String }
-  | USRemove String
+addAction ::
+  forall r _r k typ v.
+  IsSymbol k =>
+  Row.Cons k typ _r r =>
+  Settable typ v =>
+  SProxy k ->
+  UpdateAction r ->
+  Update r Unit
+addAction sp a =
+  modify_ $ Map.insert (spToPath sp) a

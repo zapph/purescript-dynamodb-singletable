@@ -101,11 +101,11 @@ data UpdateReturnValues =
   | URAllOld
 
 updateItem::
-  forall env r u.
+  forall env r.
   HasSingleTableDb env =>
   ItemCodec {|r} =>
   UpdateReturnValues ->
-  (UE.UpdateSet' r () -> UE.UpdateSet' r u) ->
+  UE.Update r Unit ->
   PrimaryKey ->
   RIO env {|r}
 updateItem retVals f {pk, sk} = do
@@ -237,10 +237,10 @@ type Repo a =
        {|a} ->
        RIO env Unit
   , updateItem::
-      forall env u.
+      forall env.
       HasSingleTableDb env =>
       UpdateReturnValues ->
-      (UE.UpdateSet' a () -> UE.UpdateSet' a u) ->
+      UE.Update a Unit ->
       PrimaryKey ->
       RIO env {|a}
   }

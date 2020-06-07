@@ -56,6 +56,9 @@ instance hasSingleTableDbId :: HasSingleTableDb SingleTableDb where
 
 newtype Path (r :: # Type) = Path String
 
+derive newtype instance pathEq :: Eq (Path r)
+derive newtype instance pathOrd :: Ord (Path r)
+
 spToPath ::
   forall r _r v s.
   IsSymbol s =>
