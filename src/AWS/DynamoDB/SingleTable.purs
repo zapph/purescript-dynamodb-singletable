@@ -7,6 +7,14 @@ module AWS.DynamoDB.SingleTable
        , deleteItem
        , putItem
        , updateItem
+       , class IsSTDbIndex
+       , indexName
+       , PrimaryIndex(..)
+       , Gsi1(..)
+       , Gsi2(..)
+       , Gsi3(..)
+       , class IndexValue
+       , query
        , queryPrimaryBySkPrefix
        , queryGsi1BySkPrefix
        , queryGsi2BySkPrefix
@@ -22,6 +30,8 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, readItem, writeItem)
 import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
+import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
+import AWS.DynamoDB.SingleTable.ConditionExpression as CE
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, dbL) as E
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
@@ -29,6 +39,7 @@ import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
 import Data.Lens (view)
 import Data.Maybe (Maybe(..))
+import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Traversable (traverse)
 import Effect (Effect)
 import Effect.Aff (throwError)
@@ -36,6 +47,7 @@ import Effect.Exception (Error, error)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Literals (StringLit, stringLit)
+import Prim.Row as Row
 import RIO (RIO)
 import Untagged.Coercible (class Coercible, coerce)
 import Untagged.Union (type (|+|), maybeToUor, uorToMaybe)
@@ -106,7 +118,7 @@ putItem { item, returnOld } = do
     else pure Nothing
 
   where
-    retValP :: forall a. Coercible a (StringLit "NONE" |+| StringLit "ALL_OLD") => a -> (StringLit "NONE" |+| StringLit "ALL_OLD")
+    retValP :: forall r. Coercible r (StringLit "NONE" |+| StringLit "ALL_OLD") => r -> (StringLit "NONE" |+| StringLit "ALL_OLD")
     retValP = coerce
 
 data UpdateReturnValues =
@@ -231,6 +243,72 @@ queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } = do
         }
       }
 
+data PrimaryIndex = PrimaryIndex
+data Gsi1 = Gsi1
+data Gsi2 = Gsi2
+data Gsi3 = Gsi3
+
+class IsSTDbIndex a (pkName :: Symbol) (skName :: Symbol) | a -> pkName skName where
+  indexName :: a -> Maybe String
+
+instance isSTDbIndexPrimary :: IsSTDbIndex PrimaryIndex "pk" "sk" where
+  indexName _ = Nothing
+
+instance isSTDbIndexGsi1 :: IsSTDbIndex Gsi1 "gsi1pk" "gsi1sk" where
+  indexName _ = Just "gsi1"
+
+instance isSTDbIndexGsi2 :: IsSTDbIndex Gsi2 "gsi2pk" "gsi2sk" where
+  indexName _ = Just "gsi2"
+
+instance isSTDbIndexGsi3 :: IsSTDbIndex Gsi3 "gsi3pk" "gsi3sk" where
+  indexName _ = Just "gsi3"
+
+class IndexValue a
+instance indexValueString :: IndexValue String
+instance indexValueMaybeString :: IndexValue (Maybe String)
+
+query ::
+  forall env a index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond.
+  HasSingleTableDb env =>
+  IsSTDbIndex index pkName skName =>
+  IndexValue pkValue =>
+  IndexValue skValue =>
+  IsSymbol pkName =>
+  Row.Cons pkName pkValue _r1 (STDbItem' a) =>
+  Row.Cons skName skValue _r2 (STDbItem' a) =>
+  Row.Cons pkName String skCond pkSkCond =>
+  Row.Cons skName String () skCond =>
+  Row.Union skCond _r3 pkSkCond =>
+  ItemCodec (STDbItem a) =>
+  index ->
+  { pk :: String
+  , skCondition :: Condition skCond
+  , scanIndexForward :: Boolean
+  } ->
+  RIO env (Array (STDbItem a))
+query index { pk, skCondition } = do
+  table <- getTable
+  res <- Cl.query (params table)
+  traverse readItemOrErr res."Items"
+
+  where
+
+    pkCondition :: Condition pkSkCond
+    pkCondition = CE.opPath (SProxy :: _ pkName) `cEq` CE.opValue pk
+
+    pkSkCondition = pkCondition `cAnd` (CE.expandCondition skCondition)
+
+    { value: expr, attributeNames, attributeValues } =
+      CmdB.build $ CE.buildParams pkSkCondition
+
+    params table =
+      { "TableName": table
+      , "IndexName": maybeToUor (indexName index)
+      , "KeyConditionExpression": expr
+      , "ExpressionAttributeNames": maybeToUor attributeNames
+      , "ExpressionAttributeValues": maybeToUor attributeValues
+      }
+
 -- Repo
 
 type Repo a =
@@ -251,13 +329,32 @@ type Repo a =
        , returnOld :: Boolean
        } ->
        RIO env (Maybe {|a})
-  , updateItem::
+  , updateItem ::
       forall env.
       HasSingleTableDb env =>
       UpdateReturnValues ->
       UE.Update a Unit ->
       PrimaryKey ->
       RIO env {|a}
+  , query ::
+      forall env index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond.
+      HasSingleTableDb env =>
+      IsSTDbIndex index pkName skName =>
+      IndexValue pkValue =>
+      IndexValue skValue =>
+      IsSymbol pkName =>
+      Row.Cons pkName pkValue _r1 a =>
+      Row.Cons skName skValue _r2 a =>
+      Row.Cons pkName String skCond pkSkCond =>
+      Row.Cons skName String () skCond =>
+      Row.Union skCond _r3 pkSkCond =>
+      ItemCodec {|a} =>
+      index ->
+      { pk :: String
+      , skCondition :: Condition skCond
+      , scanIndexForward :: Boolean
+      } ->
+      RIO env (Array {|a})
   }
 
 mkRepo ::
@@ -269,6 +366,7 @@ mkRepo =
   , deleteItem: deleteItem
   , putItem: putItem
   , updateItem: updateItem -- todo disallow updates of pk, sk
+  , query: query
   }
 
 -- Utils
