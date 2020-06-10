@@ -1,6 +1,11 @@
 module AWS.DynamoDB.SingleTable.ConditionExpression
        ( Condition
        , Operand
+       , cEq
+       , cLt
+       , cLtEq
+       , cGt
+       , cGtEq
        , cBetween
        , cIn
        , cAnd
@@ -13,7 +18,10 @@ module AWS.DynamoDB.SingleTable.ConditionExpression
        , class CanContain
        , class Containable
        , cContains
+       , opPath
+       , opValue
        , buildParams
+       , expandCondition
        ) where
 
 import Prelude
@@ -30,6 +38,9 @@ import Data.Set.NonEmpty (NonEmptySet)
 import Data.Symbol (class IsSymbol, SProxy)
 import Data.Traversable (traverse)
 import Prim.Row as Row
+import Unsafe.Coerce (unsafeCoerce)
+
+
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html
 
@@ -226,6 +237,14 @@ buildOp ::
   CommandBuilder String
 buildOp (OPath p) = CB.addName (pathToString p)
 buildOp (OValue v) = CB.addValue v
+
+expandCondition ::
+  forall a _a a'.
+  Row.Union a _a a' =>
+  Condition a ->
+  Condition a'
+expandCondition =
+  unsafeCoerce
 
 -- utils
 wrap :: String -> String
