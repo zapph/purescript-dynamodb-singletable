@@ -260,6 +260,10 @@ instance avCodecDateTime :: AVCodec DateTime where
   readAV = hush <<< unformat iso8601Ms <=< readAV
   writeAV = writeAV <<< format iso8601Ms
 
+instance avCodecRecord :: ItemCodec {|a} => AVCodec {|a} where
+  readAV = caseM readItem Nothing
+  writeAV = avM <<< writeItem
+
 type Item = Object AttributeValue
 type Item' = Object (Maybe AttributeValue)
 
