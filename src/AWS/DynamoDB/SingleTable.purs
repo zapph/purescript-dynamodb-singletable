@@ -5,7 +5,7 @@ module AWS.DynamoDB.SingleTable
        , mkSingleTableDb
        , getItem
        , deleteItem
-       , putItem_
+       , putItem
        , updateItem
        , queryPrimaryBySkPrefix
        , queryGsi1BySkPrefix
@@ -83,18 +83,31 @@ deleteItem { pk, sk } = do
     }
   traverse readItemOrErr (uorToMaybe (res."Attributes"))
 
-putItem_ ::
+putItem ::
   forall env a.
   HasSingleTableDb env =>
   ItemCodec (STDbItem a) =>
-  STDbItem a ->
-  RIO env Unit
-putItem_ a = do
+  { item :: STDbItem a
+  , returnOld :: Boolean
+  } ->
+  RIO env (Maybe (STDbItem a))
+putItem { item, returnOld } = do
   table <- getTable
-  void $ Cl.putItem
-    { "Item": writeItem a
+  res <- Cl.putItem
+    { "Item": writeItem item
     , "TableName": table
+    , "ReturnValues":
+      if returnOld
+      then retValP (stringLit :: _ "ALL_OLD")
+      else retValP (stringLit :: _ "NONE")
     }
+  if returnOld
+    then traverse readItemOrErr (uorToMaybe res."Attributes")
+    else pure Nothing
+
+  where
+    retValP :: forall a. Coercible a (StringLit "NONE" |+| StringLit "ALL_OLD") => a -> (StringLit "NONE" |+| StringLit "ALL_OLD")
+    retValP = coerce
 
 data UpdateReturnValues =
   URAllNew
@@ -231,11 +244,13 @@ type Repo a =
        HasSingleTableDb env =>
        PrimaryKey ->
        RIO env (Maybe {|a})
-  , putItem_ ::
+  , putItem ::
        forall env.
        HasSingleTableDb env =>
-       {|a} ->
-       RIO env Unit
+       { item :: {|a}
+       , returnOld :: Boolean
+       } ->
+       RIO env (Maybe {|a})
   , updateItem::
       forall env.
       HasSingleTableDb env =>
@@ -252,7 +267,7 @@ mkRepo ::
 mkRepo =
   { getItem: getItem
   , deleteItem: deleteItem
-  , putItem_: putItem_
+  , putItem: putItem
   , updateItem: updateItem -- todo disallow updates of pk, sk
   }
 
