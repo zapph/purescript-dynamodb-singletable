@@ -286,7 +286,7 @@ query ::
   , scanIndexForward :: Boolean
   } ->
   RIO env (Array (STDbItem a))
-query index { pk, skCondition } = do
+query index { pk, skCondition, scanIndexForward } = do
   table <- getTable
   res <- Cl.query (params table)
   traverse readItemOrErr res."Items"
@@ -307,6 +307,7 @@ query index { pk, skCondition } = do
       , "KeyConditionExpression": expr
       , "ExpressionAttributeNames": maybeToUor attributeNames
       , "ExpressionAttributeValues": maybeToUor attributeValues
+      , "ScanIndexForward": scanIndexForward
       }
 
 -- Repo
