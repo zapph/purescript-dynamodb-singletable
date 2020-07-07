@@ -37,10 +37,11 @@ import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GS
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
+import Data.DateTime (DateTime)
 import Data.Lens (view)
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..))
-import Data.Traversable (traverse)
+import Data.Traversable (sequence, traverse)
 import Effect (Effect)
 import Effect.Aff (throwError)
 import Effect.Exception (Error, error)
@@ -125,21 +126,25 @@ data UpdateReturnValues =
   URAllNew
   | URAllOld
 
-updateItem::
+updateItem ::
   forall env r.
   HasSingleTableDb env =>
   ItemCodec {|r} =>
   UpdateReturnValues ->
   UE.Update r Unit ->
+  (Maybe (Condition r)) ->
   PrimaryKey ->
-  RIO env {|r}
-updateItem retVals f {pk, sk} = do
+  RIO env (Maybe {|r})
+updateItem retVals updateF keyConditionF {pk, sk} = do
   table <- getTable
   res <- Cl.updateItem (params table)
-  require "Attributes" (uorToMaybe res."Attributes") >>= readItemOrErr
-
+  traverse readItemOrErr (uorToMaybe res."Attributes")
   where
-    { value: expr, attributeNames, attributeValues } = CmdB.build $ UE.buildParams f
+
+    condExpr@{ value: { updateExpr, keyConditionExpr }, attributeNames, attributeValues } = CmdB.build $ do
+      updateExpr <- UE.buildParams updateF
+      keyConditionExpr <- sequence $ CE.buildParams <$> keyConditionF
+      pure $ { updateExpr, keyConditionExpr }
 
     params table =
       { "Key": Object.fromHomogeneous
@@ -147,7 +152,8 @@ updateItem retVals f {pk, sk} = do
         , "sk": avS sk
         }
       , "TableName": table
-      , "UpdateExpression": maybeToUor expr
+      , "UpdateExpression": maybeToUor updateExpr
+      , "ConditionExpression": maybeToUor keyConditionExpr
       , "ExpressionAttributeNames": maybeToUor attributeNames
       , "ExpressionAttributeValues": maybeToUor attributeValues
       , "ReturnValues": case retVals of
@@ -266,6 +272,7 @@ instance isSTDbIndexGsi3 :: IsSTDbIndex Gsi3 "gsi3pk" "gsi3sk" where
 class IndexValue a
 instance indexValueString :: IndexValue String
 instance indexValueMaybeString :: IndexValue (Maybe String)
+instance indexValueMaybeDateTime :: IndexValue (Maybe DateTime)
 
 query ::
   forall env a index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond.
@@ -335,8 +342,9 @@ type Repo a =
       HasSingleTableDb env =>
       UpdateReturnValues ->
       UE.Update a Unit ->
+      (Maybe (Condition a)) ->
       PrimaryKey ->
-      RIO env {|a}
+      RIO env (Maybe {|a})
   , query ::
       forall env index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond.
       HasSingleTableDb env =>

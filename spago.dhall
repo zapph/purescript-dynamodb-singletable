@@ -3,6 +3,7 @@
   [ "aff"
   , "aff-promise"
   , "console"
+  , "debug"
   , "effect"
   , "foreign"
   , "foreign-object"
