@@ -37,7 +37,6 @@ import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GS
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
-import Data.DateTime (DateTime)
 import Data.Lens (view)
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..))
@@ -141,7 +140,7 @@ updateItem retVals updateF keyConditionF {pk, sk} = do
   traverse readItemOrErr (uorToMaybe res."Attributes")
   where
 
-    condExpr@{ value: { updateExpr, keyConditionExpr }, attributeNames, attributeValues } = CmdB.build $ do
+    { value: { updateExpr, keyConditionExpr }, attributeNames, attributeValues } = CmdB.build $ do
       updateExpr <- UE.buildParams updateF
       keyConditionExpr <- sequence $ CE.buildParams <$> keyConditionF
       pure $ { updateExpr, keyConditionExpr }
