@@ -272,7 +272,6 @@ instance isSTDbIndexGsi3 :: IsSTDbIndex Gsi3 "gsi3pk" "gsi3sk" where
 class IndexValue a
 instance indexValueString :: IndexValue String
 instance indexValueMaybeString :: IndexValue (Maybe String)
-instance indexValueMaybeDateTime :: IndexValue (Maybe DateTime)
 
 query ::
   forall env a index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond.
