@@ -356,15 +356,7 @@ type Repo a =
        { item :: {|a}
        , returnOld :: Boolean
        } ->
-       RIO env (Maybe {|a})
-  , updateItem ::
-      forall env.
-      HasSingleTableDb env =>
-      UpdateReturnValues ->
-      UE.Update a Unit ->
-      (Maybe (Condition a)) ->
-      PrimaryKey ->
-      RIO env (Maybe {|a})
+       RIO env (Maybe {|a})  
   , createOrUpdateItem ::
       forall env.
       HasSingleTableDb env =>
@@ -374,14 +366,13 @@ type Repo a =
       PrimaryKey ->
       RIO env (Maybe {|a})
   , updateExistingItem ::
-      forall env a.
+      forall env.
       HasSingleTableDb env =>
-      ItemCodec (STDbItem a) =>
       UpdateReturnValues ->
-      UE.Update (STDbItem' a) Unit ->
-      (Maybe (Condition (STDbItem' a))) ->
+      UE.Update a Unit ->
+      (Maybe (Condition a)) ->
       PrimaryKey ->
-      RIO env (STDbItem a)
+      RIO env {|a}
   , query ::
       forall env index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond.
       HasSingleTableDb env =>
@@ -411,9 +402,8 @@ mkRepo =
   { getItem: getItem
   , deleteItem: deleteItem
   , putItem: putItem
-  , createOrUpdateItem
-  , updateExistingItem
-  , updateItem: updateItem -- todo disallow updates of pk, sk
+  , createOrUpdateItem  
+  , updateExistingItem: updateExistingItem -- todo disallow updates of pk, sk
   , query: query
   }
 
