@@ -13,6 +13,7 @@ module AWS.DynamoDB.SingleTable.ConditionExpression
        , cNot
        , cAttributeExists
        , cAttributeNotExists
+       , cItemExists
        , class CanBeginWith
        , cBeginsWith
        , class CanContain
@@ -29,13 +30,13 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, avS, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CB
-import AWS.DynamoDB.SingleTable.Types (AttributeValue, Path, pathToString, spToPath)
+import AWS.DynamoDB.SingleTable.Types (AttributeValue, Path, STDbItem', pathToString, spToPath)
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
 import Data.Maybe (Maybe)
 import Data.Set.NonEmpty (NonEmptySet)
-import Data.Symbol (class IsSymbol, SProxy)
+import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Traversable (traverse)
 import Prim.Row as Row
 import Unsafe.Coerce (unsafeCoerce)
@@ -111,6 +112,12 @@ cOr = COr
 
 cNot :: forall r. Condition r -> Condition r
 cNot = CNot
+
+cItemExists ::
+  forall r.
+  Condition (STDbItem' r)
+cItemExists =
+  CAttributeExists $ spToPath (SProxy :: _ "pk")
 
 cAttributeExists ::
   forall r _r k v.

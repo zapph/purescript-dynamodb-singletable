@@ -1,7 +1,5 @@
 module AWS.DynamoDB.SingleTable
-       ( STDbItem'
-       , STDbItem
-       , UpdateReturnValues(..)
+       ( UpdateReturnValues(..)
        , mkSingleTableDb
        , getItem
        , deleteItem
@@ -32,8 +30,8 @@ import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
-import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, SingleTableDb(..), dbL)
-import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, dbL) as E
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, SingleTableDb(..), STDbItem, STDbItem', dbL)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, STDbItem, STDbItem', dbL) as E
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
@@ -52,8 +50,6 @@ import RIO (RIO)
 import Untagged.Coercible (class Coercible, coerce)
 import Untagged.Union (type (|+|), maybeToUor, uorToMaybe)
 
-type STDbItem' a = ( pk :: String, sk :: String | a )
-type STDbItem a = Record (STDbItem' a)
 
 mkSingleTableDb :: String -> Effect SingleTableDb
 mkSingleTableDb table =
@@ -124,6 +120,32 @@ putItem { item, returnOld } = do
 data UpdateReturnValues =
   URAllNew
   | URAllOld
+
+updateExistingItem ::
+  forall env a.
+  HasSingleTableDb env =>
+  ItemCodec (STDbItem a) =>
+  UpdateReturnValues ->
+  UE.Update (STDbItem' a) Unit ->
+  (Maybe (Condition (STDbItem' a))) ->
+  PrimaryKey ->
+  RIO env (STDbItem a)
+updateExistingItem retVals updateF keyConditionF pk = do
+  updateItem retVals updateF finalKeyConditionF pk
+  >>= require "Item"
+  where
+  finalKeyConditionF = keyConditionF <#> cAnd CE.cItemExists
+
+createOrUpdateItem ::
+  forall env r.
+  HasSingleTableDb env =>
+  ItemCodec {|r} =>
+  UpdateReturnValues ->
+  UE.Update r Unit ->
+  (Maybe (Condition r)) ->
+  PrimaryKey ->
+  RIO env (Maybe {|r})
+createOrUpdateItem = updateItem
 
 updateItem ::
   forall env r.
@@ -343,6 +365,23 @@ type Repo a =
       (Maybe (Condition a)) ->
       PrimaryKey ->
       RIO env (Maybe {|a})
+  , createOrUpdateItem ::
+      forall env.
+      HasSingleTableDb env =>
+      UpdateReturnValues ->
+      UE.Update a Unit ->
+      (Maybe (Condition a)) ->
+      PrimaryKey ->
+      RIO env (Maybe {|a})
+  , updateExistingItem ::
+      forall env a.
+      HasSingleTableDb env =>
+      ItemCodec (STDbItem a) =>
+      UpdateReturnValues ->
+      UE.Update (STDbItem' a) Unit ->
+      (Maybe (Condition (STDbItem' a))) ->
+      PrimaryKey ->
+      RIO env (STDbItem a)
   , query ::
       forall env index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond.
       HasSingleTableDb env =>
@@ -372,6 +411,8 @@ mkRepo =
   { getItem: getItem
   , deleteItem: deleteItem
   , putItem: putItem
+  , createOrUpdateItem
+  , updateExistingItem
   , updateItem: updateItem -- todo disallow updates of pk, sk
   , query: query
   }

@@ -5,6 +5,8 @@ module AWS.DynamoDB.SingleTable.Types
        , dbL
        , PrimaryKey
        , GSI1
+       , STDbItem
+       , STDbItem'
        , AttributeValue
        , AVObject(..)
        , Path
@@ -36,6 +38,9 @@ type GSI1 =
   { gsi1pk :: String
   , gsi1sk :: String
   }
+
+type STDbItem' a = ( pk :: String, sk :: String | a )
+type STDbItem a = Record (STDbItem' a)
 
 foreign import data AttributeValue :: Type
 
