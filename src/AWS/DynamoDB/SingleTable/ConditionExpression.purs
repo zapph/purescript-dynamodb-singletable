@@ -1,6 +1,7 @@
 module AWS.DynamoDB.SingleTable.ConditionExpression
        ( Condition
        , Operand
+       , class Comparable
        , cEq
        , cLt
        , cLtEq
@@ -80,22 +81,28 @@ data Typ =
   | TypN
   | TypNS
 
-cEq :: forall r v. Operand r v -> Operand r v -> Condition r
+class Comparable a b
+instance comparableMaybes        :: Comparable (Maybe a) (Maybe a)
+else instance comparableLMaybe   :: Comparable (Maybe a) a
+else instance comparableRMaybe   :: Comparable a (Maybe a)
+else instance comparableIdentity :: Comparable a a
+
+cEq :: forall r v1 v2. Comparable v1 v2 => Operand r v1 -> Operand r v2 -> Condition r
 cEq = ccomp CompEq
 
-cLt :: forall r v. Operand r v -> Operand r v -> Condition r
+cLt :: forall r v1 v2. Comparable v1 v2 => Operand r v1 -> Operand r v2 -> Condition r
 cLt = ccomp CompLt
 
-cLtEq :: forall r v. Operand r v -> Operand r v -> Condition r
+cLtEq :: forall r v1 v2. Comparable v1 v2 => Operand r v1 -> Operand r v2 -> Condition r
 cLtEq = ccomp CompLtEq
 
-cGt :: forall r v. Operand r v -> Operand r v -> Condition r
+cGt :: forall r v1 v2. Comparable v1 v2 => Operand r v1 -> Operand r v2 -> Condition r
 cGt = ccomp CompGt
 
-cGtEq :: forall r v. Operand r v -> Operand r v -> Condition r
+cGtEq :: forall r v1 v2. Comparable v1 v2 => Operand r v1 -> Operand r v2 -> Condition r
 cGtEq = ccomp CompGtEq
 
-ccomp :: forall r v. Comparator -> Operand r v -> Operand r v -> Condition r
+ccomp :: forall r v1 v2. Comparable v1 v2 => Comparator -> Operand r v1 -> Operand r v2 -> Condition r
 ccomp comp l r = CComp (mkExists l) comp (mkExists r)
 
 cBetween :: forall r v. Operand r v -> { min :: Operand r v, max ::  Operand r v } -> Condition r
