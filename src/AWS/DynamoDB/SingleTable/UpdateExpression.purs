@@ -13,6 +13,7 @@ module AWS.DynamoDB.SingleTable.UpdateExpression
        , opListAppend
        , class Settable
        , set
+       , set_
        , remove
        , class Addable
        , add
@@ -230,6 +231,17 @@ set ::
   SetValue r v ->
   Update r Unit
 set sp sv = addAction sp (UASet (mkExists sv))
+
+set_ ::
+  forall r _r k typ v.
+  IsSymbol k =>
+  Row.Cons k typ _r r =>
+  Settable typ v =>
+  AVCodec v =>
+  SProxy k ->
+  v ->
+  Update r Unit
+set_ sp = set sp <<< setValue
 
 remove ::
   forall r _r k v.
