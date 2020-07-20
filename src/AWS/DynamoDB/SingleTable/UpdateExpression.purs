@@ -15,6 +15,7 @@ module AWS.DynamoDB.SingleTable.UpdateExpression
        , set
        , set_
        , remove
+       , setOrRemove
        , class Addable
        , add
        , class Deletable
@@ -250,6 +251,17 @@ remove ::
   SProxy k ->
   Update r Unit
 remove sp = addAction sp UARemove
+
+setOrRemove ::
+  forall r _r k v.
+  IsSymbol k =>
+  Row.Cons k (Maybe v) _r r =>
+  AVCodec v =>
+  SProxy k ->
+  Maybe v ->
+  Update r Unit
+setOrRemove sp Nothing = remove sp
+setOrRemove sp (Just v) = set_ sp v
 
 class Addable typ addend | typ -> addend
 instance addableNumber :: Addable Number Number
