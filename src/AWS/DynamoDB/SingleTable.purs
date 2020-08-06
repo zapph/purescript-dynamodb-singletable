@@ -356,7 +356,7 @@ type Repo a =
        { item :: {|a}
        , returnOld :: Boolean
        } ->
-       RIO env (Maybe {|a})  
+       RIO env (Maybe {|a})
   , createOrUpdateItem ::
       forall env.
       HasSingleTableDb env =>
@@ -402,7 +402,7 @@ mkRepo =
   { getItem: getItem
   , deleteItem: deleteItem
   , putItem: putItem
-  , createOrUpdateItem  
+  , createOrUpdateItem
   , updateExistingItem: updateExistingItem -- todo disallow updates of pk, sk
   , query: query
   }
