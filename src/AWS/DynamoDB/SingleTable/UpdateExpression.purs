@@ -202,7 +202,7 @@ opValue = OValue <<< writeAV
 
 opIfNotExists ::
   forall path v _r r.
-  Row.Cons path (Maybe v) _r r =>
+  Row.Cons path v _r r =>
   IsSymbol path =>
   SProxy path ->
   Operand r v ->
