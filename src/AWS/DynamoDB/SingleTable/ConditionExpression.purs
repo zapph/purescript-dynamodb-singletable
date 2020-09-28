@@ -229,7 +229,7 @@ buildParams (CAttributeExists p) = ado
   in "attribute_exists(" <> p' <> ")"
 buildParams (CAttributeNotExists p) = ado
   p' <- CB.addName (pathToString p)
-  in "attribute_note_exists(" <> p' <> ")"
+  in "attribute_not_exists(" <> p' <> ")"
 buildParams (CBeginsWith p substr) = ado
   p' <- CB.addName (pathToString p)
   substr' <- CB.addValue (avS substr)

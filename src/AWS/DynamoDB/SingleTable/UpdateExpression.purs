@@ -201,8 +201,9 @@ opValue = OValue <<< writeAV
 
 
 opIfNotExists ::
-  forall path v _r r.
-  Row.Cons path v _r r =>
+  forall path v _r r typ.
+  Row.Cons path typ _r r =>
+  Settable typ v =>
   IsSymbol path =>
   SProxy path ->
   Operand r v ->
