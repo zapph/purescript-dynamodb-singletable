@@ -11,6 +11,7 @@ module AWS.DynamoDB.SingleTable
        , Gsi1(..)
        , Gsi2(..)
        , Gsi3(..)
+       , Gsi4(..)
        , class IndexValue
        , query
        , queryPrimaryBySkPrefix
@@ -274,6 +275,7 @@ data PrimaryIndex = PrimaryIndex
 data Gsi1 = Gsi1
 data Gsi2 = Gsi2
 data Gsi3 = Gsi3
+data Gsi4 = Gsi4
 
 class IsSTDbIndex a (pkName :: Symbol) (skName :: Symbol) | a -> pkName skName where
   indexName :: a -> Maybe String
@@ -289,6 +291,9 @@ instance isSTDbIndexGsi2 :: IsSTDbIndex Gsi2 "gsi2pk" "gsi2sk" where
 
 instance isSTDbIndexGsi3 :: IsSTDbIndex Gsi3 "gsi3pk" "gsi3sk" where
   indexName _ = Just "gsi3"
+
+instance isSTDbIndexGsi4 :: IsSTDbIndex Gsi4 "gsi4pk" "gsi4sk" where
+  indexName _ = Just "gsi4"
 
 class IndexValue a
 instance indexValueString :: IndexValue String
