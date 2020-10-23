@@ -5,6 +5,7 @@ module AWS.DynamoDB.SingleTable
        , deleteItem
        , putItem
        , updateItem
+       , transactWriteItems
        , class IsSTDbIndex
        , indexName
        , PrimaryIndex(..)
@@ -31,7 +32,8 @@ import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
-import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, SingleTableDb(..), STDbItem, STDbItem', dbL)
+import AWS.DynamoDB.SingleTable.OperationBuilder (PutItemTxn, TransactWriteItemsOperation, mkTransactWriteItems, putItemTxn)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, STDbItem, STDbItem', SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, STDbItem, STDbItem', dbL) as E
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Monad.Error.Class (class MonadThrow)
@@ -40,6 +42,7 @@ import Data.Lens (view)
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Traversable (sequence, traverse)
+import Debug.Trace (traceM)
 import Effect (Effect)
 import Effect.Aff (throwError)
 import Effect.Exception (Error, error)
@@ -91,6 +94,35 @@ deleteItem { pk, sk } = do
     , "ReturnValues": stringLit :: _ "ALL_OLD"
     }
   traverse readItemOrErr (uorToMaybe (res."Attributes"))
+
+-- // TODO: how to not explicitly pass the table thing
+
+-- // TODO: should put and other txn item be tied to a Repo para type checked agad?
+transactWriteItems ::
+  forall env.
+  HasSingleTableDb env =>
+  ({ put :: PutItemTxn } -> Array (TransactWriteItemsOperation)) ->
+  RIO env Unit
+transactWriteItems getOps = do
+  table <- getTable
+  let
+    twi = mkTransactWriteItems (getOps { put: putItemTxn table })
+  res <- Cl.transactWriteItems { "TransactItems": twi, "ReturnItemCollectionMetrics": stringLit :: _ "SIZE" }
+  traceM res
+  pure unit
+
+test ::
+  forall env.
+  HasSingleTableDb env =>
+  RIO env Unit
+test =
+  transactWriteItems
+    ( \{ put } ->
+        [ put { pk: "test", sk: "test", id: 1 }
+        , put { pk: "waw", sk: "waw", id: "hey" }
+        ]
+    )
+
 
 putItem ::
   forall env a.
