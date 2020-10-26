@@ -160,13 +160,14 @@ putItem ::
 putItem = _callDbFn "putItem"
 
 type BaseUpdateItem r =
-  ( "Key" :: Object AttributeValue
+  ( "Key" :: AVObject
   , "TableName" :: String
   , "ConditionExpression" :: UndefinedOr String
   , "ExpressionAttributeNames" :: UndefinedOr (Object String)
   , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
   , "UpdateExpression" :: UndefinedOr String
-  | r)
+  | r
+  )
 
 type UpdateItemReq =
   { | BaseUpdateItem
@@ -209,16 +210,16 @@ type ConditionCheck
   = { "ConditionExpression" :: UndefinedOr String
     , "ExpressionAttributeNames" :: UndefinedOr (Object String)
     , "ExpressionAttributeValues" :: UndefinedOr (Object AttributeValue)
-    , "Key" :: Object AttributeValue
+    , "Key" :: AVObject
     , "ReturnValuesOnConditionCheckFailure" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
     , "TableName" :: String
     }
 
 type TransactWriteItem =
-  { "ConditionCheck" :: UndefinedOr String -- // TODO:
+  { "ConditionCheck" :: UndefinedOr ConditionCheck
   , "Put" :: UndefinedOr PutItemTransaction
   , "Delete" :: UndefinedOr DeleteItemTransaction
-  , "Update" :: UndefinedOr UpdateItemReq
+  , "Update" :: UndefinedOr UpdateItemTransaction
   }
 
 type TransactWriteItemsReq =
