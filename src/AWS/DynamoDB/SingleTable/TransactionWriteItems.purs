@@ -1,7 +1,6 @@
 module AWS.DynamoDB.SingleTable.TransactionWriteItems where
 
 import Prelude
-
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, writeItem)
 import AWS.DynamoDB.SingleTable.Client (ConditionCheck, DeleteItemTransaction, PutItemTransaction, TransactWriteItem, UpdateItemTransaction, transactWriteItem)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
@@ -15,8 +14,8 @@ import Foreign.Object as Object
 import Untagged.Coercible (coerce)
 import Untagged.Union (maybeToUor)
 
-
-type TransactWriteItemsOperationF = String -> TransactWriteItemsOperation
+type TransactWriteItemsOperationF
+  = String -> TransactWriteItemsOperation
 
 data TransactWriteItemsOperation
   = TWIPut PutItemTransaction
@@ -24,19 +23,6 @@ data TransactWriteItemsOperation
   | TWIUpdate UpdateItemTransaction
   | TWIConditionCheck ConditionCheck
 
-
--- putItemTxn ::
---   forall a.
---   ItemCodec (STDbItem a) =>
---   String ->
---   STDbItem a -> TransactWriteItemsOperation
--- putItemTxn table item =
---   TWIPut
---     ( coerce
---         { "Item": writeItem item
---         , "TableName": table
---         }
---     )
 putItemTxn ::
   forall a.
   ItemCodec (STDbItem a) =>
@@ -65,71 +51,66 @@ deleteItemTxn { pk, sk } table =
         }
     )
 
--- // TODO: should i refactor this to have same builder
--- // TODO: what should be the name of the file
 updateItemTxn ::
   forall r.
-  ItemCodec {|r } =>
+  ItemCodec { | r } =>
+  PrimaryKey ->
   UE.Update r Unit ->
   (Maybe (Condition r)) ->
-  PrimaryKey -> TransactWriteItemsOperationF
-updateItemTxn updateF keyConditionF {pk, sk} table = do
+  TransactWriteItemsOperationF
+updateItemTxn { pk, sk } updateF keyConditionF table = do
   let
     { value: { updateExpr, keyConditionExpr }, attributeNames, attributeValues } =
-      CmdB.build $ do
-        updateExpr <- UE.buildParams updateF
-        keyConditionExpr <- sequence $ CE.buildParams <$> keyConditionF
-        pure $ { updateExpr, keyConditionExpr }
+      CmdB.build
+        $ do
+            updateExpr <- UE.buildParams updateF
+            keyConditionExpr <- sequence $ CE.buildParams <$> keyConditionF
+            pure $ { updateExpr, keyConditionExpr }
   TWIUpdate
-    (coerce
-      { "Key":
-        AVObject
-          $ Object.fromHomogeneous
-            { "pk": avS pk
-            , "sk": avS sk
-            }
-      , "TableName": table
-      , "UpdateExpression": maybeToUor updateExpr
-      , "ConditionExpression": maybeToUor keyConditionExpr
-      , "ExpressionAttributeNames": maybeToUor attributeNames
-      , "ExpressionAttributeValues": maybeToUor attributeValues
-      }
+    ( coerce
+        { "Key":
+            AVObject
+              $ Object.fromHomogeneous
+                  { "pk": avS pk
+                  , "sk": avS sk
+                  }
+        , "TableName": table
+        , "UpdateExpression": maybeToUor updateExpr
+        , "ConditionExpression": maybeToUor keyConditionExpr
+        , "ExpressionAttributeNames": maybeToUor attributeNames
+        , "ExpressionAttributeValues": maybeToUor attributeValues
+        }
     )
 
 conditionCheck ::
   forall r.
-  ItemCodec {|r } =>
+  ItemCodec { | r } =>
+  PrimaryKey ->
   Condition r ->
-  PrimaryKey -> TransactWriteItemsOperationF
-conditionCheck condition {pk,sk} table =
+  TransactWriteItemsOperationF
+conditionCheck { pk, sk } condition table = do
   let
-    { value: conditionExpr, attributeNames, attributeValues } =
-      CmdB.build $ CE.buildParams condition
-  in
-    TWIConditionCheck
-      (coerce
+    { value: conditionExpr, attributeNames, attributeValues } = CmdB.build $ CE.buildParams condition
+  TWIConditionCheck
+    ( coerce
         { "ConditionExpression": conditionExpr
-        , "ExpressionAttributeNames":  maybeToUor attributeNames
-        , "ExpressionAttributeValues":  maybeToUor attributeValues
+        , "ExpressionAttributeNames": maybeToUor attributeNames
+        , "ExpressionAttributeValues": maybeToUor attributeValues
         , "Key":
             AVObject
-            $ Object.fromHomogeneous
-              { "pk": avS pk
-              , "sk": avS sk
-              }
+              $ Object.fromHomogeneous
+                  { "pk": avS pk
+                  , "sk": avS sk
+                  }
         , "TableName": table
         }
-      )
-
-
-mkTransactWriteItems ::
-  Array TransactWriteItemsOperation ->
-  Array TransactWriteItem
-mkTransactWriteItems =
-  map
-    ( case _ of
-        TWIPut put -> transactWriteItem { "Put": put }
-        TWIDelete del -> transactWriteItem { "Delete": del }
-        TWIUpdate upd -> transactWriteItem { "Update": upd }
-        TWIConditionCheck cc -> transactWriteItem { "ConditionCheck": cc }
     )
+
+toTransasctWriteItem ::
+  TransactWriteItemsOperation ->
+  TransactWriteItem
+toTransasctWriteItem = case _ of
+  TWIPut put -> transactWriteItem { "Put": put }
+  TWIDelete del -> transactWriteItem { "Delete": del }
+  TWIUpdate upd -> transactWriteItem { "Update": upd }
+  TWIConditionCheck cc -> transactWriteItem { "ConditionCheck": cc }

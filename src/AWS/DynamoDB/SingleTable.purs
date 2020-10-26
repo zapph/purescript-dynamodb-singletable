@@ -5,8 +5,7 @@ module AWS.DynamoDB.SingleTable
        , deleteItem
        , putItem
        , updateItem
-      --  , transactWriteItems
-       , transactWriteItems'
+       , transactWriteItems
        , class IsSTDbIndex
        , indexName
        , PrimaryIndex(..)
@@ -33,7 +32,7 @@ import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
-import AWS.DynamoDB.SingleTable.TransactionWriteItems (TransactWriteItemsOperation, TransactWriteItemsOperationF)
+import AWS.DynamoDB.SingleTable.TransactionWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactionWriteItems as TWI
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, STDbItem, STDbItem', SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, STDbItem, STDbItem', dbL) as E
@@ -44,7 +43,6 @@ import Data.Lens (view)
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Traversable (sequence, traverse)
-import Debug.Trace (traceM)
 import Effect (Effect)
 import Effect.Aff (throwError)
 import Effect.Exception (Error, error)
@@ -97,37 +95,19 @@ deleteItem { pk, sk } = do
     }
   traverse readItemOrErr (uorToMaybe (res."Attributes"))
 
--- // TODO: how to not explicitly pass the table thing
 
--- // TODO: should put and other txn item be tied to a Repo para type checked agad?
--- transactWriteItems ::
---   forall env.
---   HasSingleTableDb env =>
---   ({ put :: PutItemTxn } -> Array (TransactWriteItemsOperation)) ->
---   RIO env Unit
--- transactWriteItems getOps = do
---   table <- getTable
---   let
---     twi = TWI.mkTransactWriteItems (getOps { put: putItemTxn table })
---   res <-
---     Cl.transactWriteItems
---       { "TransactItems": twi
---       , "ReturnItemCollectionMetrics": stringLit :: _ "SIZE"
---       }
---   pure unit
-
-transactWriteItems' ::
+transactWriteItems ::
   forall env.
   HasSingleTableDb env =>
   Array TransactWriteItemsOperationF ->
   RIO env Unit
-transactWriteItems' opsFs = do
+transactWriteItems opsFs = do
   table <- getTable
   let
-    twi = TWI.mkTransactWriteItems $ opsFs <#> \opsF -> opsF table
+    transactItems = opsFs <#> \opsF -> TWI.toTransasctWriteItem $ opsF table
   res <-
     Cl.transactWriteItems
-      { "TransactItems": twi
+      { "TransactItems": transactItems
       }
   pure unit
 
@@ -442,12 +422,12 @@ type Repo a =
   , deleteItemTxn ::
       PrimaryKey -> TransactWriteItemsOperationF
   , updateItemTxn ::
+      PrimaryKey ->
       UE.Update a Unit ->
-      (Maybe (Condition a)) ->
-      PrimaryKey -> TransactWriteItemsOperationF
+      (Maybe (Condition a)) -> TransactWriteItemsOperationF
   , conditionCheck ::
-      Condition a ->
-      PrimaryKey -> TransactWriteItemsOperationF
+      PrimaryKey ->
+      Condition a -> TransactWriteItemsOperationF
   }
 
 mkRepo ::
