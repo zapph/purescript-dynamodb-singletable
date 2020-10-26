@@ -32,8 +32,8 @@ import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
-import AWS.DynamoDB.SingleTable.TransactionWriteItems (TransactWriteItemsOperationF)
-import AWS.DynamoDB.SingleTable.TransactionWriteItems as TWI
+import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
+import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, STDbItem, STDbItem', SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, STDbItem, STDbItem', dbL) as E
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
@@ -104,7 +104,7 @@ transactWriteItems ::
 transactWriteItems opsFs = do
   table <- getTable
   let
-    transactItems = opsFs <#> \opsF -> TWI.toTransasctWriteItem $ opsF table
+    transactItems = opsFs <#> \opsF -> TWI.toTransactWriteItem $ opsF table
   res <-
     Cl.transactWriteItems
       { "TransactItems": transactItems

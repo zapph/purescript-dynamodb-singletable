@@ -1,4 +1,4 @@
-module AWS.DynamoDB.SingleTable.TransactionWriteItems where
+module AWS.DynamoDB.SingleTable.TransactWriteItems where
 
 import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, writeItem)
@@ -106,10 +106,10 @@ conditionCheck { pk, sk } condition table = do
         }
     )
 
-toTransasctWriteItem ::
+toTransactWriteItem ::
   TransactWriteItemsOperation ->
   TransactWriteItem
-toTransasctWriteItem = case _ of
+toTransactWriteItem = case _ of
   TWIPut put -> transactWriteItem { "Put": put }
   TWIDelete del -> transactWriteItem { "Delete": del }
   TWIUpdate upd -> transactWriteItem { "Update": upd }
