@@ -174,7 +174,9 @@ updateExistingItem retVals updateF keyConditionF pk = do
   updateItem retVals updateF finalKeyConditionF pk
   >>= require "Item"
   where
-  finalKeyConditionF = keyConditionF <#> cAnd CE.cItemExists
+  finalKeyConditionF =
+    (keyConditionF <#> cAnd CE.cItemExists)
+      <|> pure CE.cItemExists
 
 createOrUpdateItem ::
   forall env r.
