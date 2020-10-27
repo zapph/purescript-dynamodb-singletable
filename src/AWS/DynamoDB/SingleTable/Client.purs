@@ -22,7 +22,6 @@ module AWS.DynamoDB.SingleTable.Client
        , UpdateItemTransaction
        , ConditionCheck
        , TransactWriteItem
-       , transactWriteItem
        , transactWriteItems
        ) where
 
@@ -37,7 +36,7 @@ import Effect.Aff.Class (liftAff)
 import Foreign.Object (Object)
 import Literals (StringLit)
 import RIO (RIO)
-import Untagged.Coercible (class Coercible, coerce)
+import Untagged.Coercible (class Coercible)
 import Untagged.Union (type (|+|), UndefinedOr)
 
 type Capacity =
@@ -106,7 +105,7 @@ query ::
 query = _callDbFn "query"
 
 -- // TODO: deleteItemreq seems to be lacking other options
--- // https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DeleteItem.html
+-- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DeleteItem.html
 type BaseDeleteItem r =
   ( "Key" :: AVObject
   , "TableName" :: String
@@ -215,12 +214,11 @@ type ConditionCheck
     , "TableName" :: String
     }
 
-type TransactWriteItem =
-  { "ConditionCheck" :: UndefinedOr ConditionCheck
-  , "Put" :: UndefinedOr PutItemTransaction
-  , "Delete" :: UndefinedOr DeleteItemTransaction
-  , "Update" :: UndefinedOr UpdateItemTransaction
-  }
+type TransactWriteItem
+  = { "ConditionCheck" :: ConditionCheck }
+      |+| { "Put" :: PutItemTransaction }
+      |+| { "Delete" :: DeleteItemTransaction }
+      |+| { "Update" :: UpdateItemTransaction }
 
 type TransactWriteItemsReq =
   { "ClientRequestToken" :: UndefinedOr String
@@ -228,9 +226,6 @@ type TransactWriteItemsReq =
   , "ReturnItemCollectionMetrics" :: UndefinedOr (StringLit "SIZE" |+| StringLit "NONE")
   , "TransactItems" :: Array TransactWriteItem
   }
-
-transactWriteItem :: forall a. Coercible a TransactWriteItem => a -> TransactWriteItem
-transactWriteItem = coerce
 
 transactWriteItems ::
   forall env req.

@@ -417,15 +417,15 @@ type Repo a =
       , scanIndexForward :: Boolean
       } ->
       RIO env (Array {|a})
-  , putItemTxn ::
+  , txPutItem ::
       {|a} -> TransactWriteItemsOperationF
-  , deleteItemTxn ::
+  , txDeleteItem ::
       PrimaryKey -> TransactWriteItemsOperationF
-  , updateItemTxn ::
+  , txUpdateItem ::
       PrimaryKey ->
       UE.Update a Unit ->
       (Maybe (Condition a)) -> TransactWriteItemsOperationF
-  , conditionCheck ::
+  , txConditionCheck ::
       PrimaryKey ->
       Condition a -> TransactWriteItemsOperationF
   }
@@ -441,10 +441,10 @@ mkRepo =
   , createOrUpdateItem
   , updateExistingItem: updateExistingItem -- todo disallow updates of pk, sk
   , query: query
-  , putItemTxn: TWI.putItemTxn
-  , deleteItemTxn: TWI.deleteItemTxn
-  , updateItemTxn: TWI.updateItemTxn
-  , conditionCheck: TWI.conditionCheck
+  , txPutItem: TWI.txPutItem
+  , txDeleteItem: TWI.txDeleteItem
+  , txUpdateItem: TWI.txUpdateItem
+  , txConditionCheck: TWI.txConditionCheck
   }
 
 -- Utils

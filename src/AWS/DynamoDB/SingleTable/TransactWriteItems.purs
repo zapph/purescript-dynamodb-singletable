@@ -1,8 +1,16 @@
-module AWS.DynamoDB.SingleTable.TransactWriteItems where
+module AWS.DynamoDB.SingleTable.TransactWriteItems
+  ( txPutItem
+  , txUpdateItem
+  , txDeleteItem
+  , txConditionCheck
+  , toTransactWriteItem
+  , TransactWriteItemsOperationF
+  , TransactWriteItemsOperation
+  ) where
 
 import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, writeItem)
-import AWS.DynamoDB.SingleTable.Client (ConditionCheck, DeleteItemTransaction, PutItemTransaction, TransactWriteItem, UpdateItemTransaction, transactWriteItem)
+import AWS.DynamoDB.SingleTable.Client (ConditionCheck, DeleteItemTransaction, PutItemTransaction, UpdateItemTransaction, TransactWriteItem)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
@@ -11,7 +19,7 @@ import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Data.Maybe (Maybe)
 import Data.Traversable (sequence)
 import Foreign.Object as Object
-import Untagged.Coercible (coerce)
+import Untagged.Coercible (class Coercible, coerce)
 import Untagged.Union (maybeToUor)
 
 type TransactWriteItemsOperationF
@@ -23,11 +31,11 @@ data TransactWriteItemsOperation
   | TWIUpdate UpdateItemTransaction
   | TWIConditionCheck ConditionCheck
 
-putItemTxn ::
+txPutItem ::
   forall a.
   ItemCodec (STDbItem a) =>
   STDbItem a -> TransactWriteItemsOperationF
-putItemTxn item table =
+txPutItem item table =
   TWIPut
     ( coerce
         { "Item": writeItem item
@@ -35,10 +43,10 @@ putItemTxn item table =
         }
     )
 
-deleteItemTxn ::
+txDeleteItem ::
   PrimaryKey ->
   TransactWriteItemsOperationF
-deleteItemTxn { pk, sk } table =
+txDeleteItem { pk, sk } table =
   TWIDelete
     ( coerce
         { "Key":
@@ -51,14 +59,14 @@ deleteItemTxn { pk, sk } table =
         }
     )
 
-updateItemTxn ::
+txUpdateItem ::
   forall r.
   ItemCodec { | r } =>
   PrimaryKey ->
   UE.Update r Unit ->
   (Maybe (Condition r)) ->
   TransactWriteItemsOperationF
-updateItemTxn { pk, sk } updateF keyConditionF table = do
+txUpdateItem { pk, sk } updateF keyConditionF table = do
   let
     { value: { updateExpr, keyConditionExpr }, attributeNames, attributeValues } =
       CmdB.build
@@ -82,13 +90,13 @@ updateItemTxn { pk, sk } updateF keyConditionF table = do
         }
     )
 
-conditionCheck ::
+txConditionCheck ::
   forall r.
   ItemCodec { | r } =>
   PrimaryKey ->
   Condition r ->
   TransactWriteItemsOperationF
-conditionCheck { pk, sk } condition table = do
+txConditionCheck { pk, sk } condition table = do
   let
     { value: conditionExpr, attributeNames, attributeValues } = CmdB.build $ CE.buildParams condition
   TWIConditionCheck
@@ -114,3 +122,6 @@ toTransactWriteItem = case _ of
   TWIDelete del -> transactWriteItem { "Delete": del }
   TWIUpdate upd -> transactWriteItem { "Update": upd }
   TWIConditionCheck cc -> transactWriteItem { "ConditionCheck": cc }
+
+transactWriteItem :: forall a. Coercible a TransactWriteItem => a -> TransactWriteItem
+transactWriteItem = coerce
