@@ -16,6 +16,7 @@ module AWS.DynamoDB.SingleTable.ConditionExpression
        , cAttributeExists
        , cAttributeNotExists
        , cItemExists
+       , cItemNotExists
        , class CanBeginWith
        , cBeginsWith
        , class CanContain
@@ -129,6 +130,12 @@ cItemExists ::
   Condition (STDbItem' r)
 cItemExists =
   CAttributeExists $ spToPath (SProxy :: _ "pk")
+
+cItemNotExists ::
+  forall r.
+  Condition (STDbItem' r)
+cItemNotExists =
+  CAttributeNotExists $ spToPath (SProxy :: _ "pk")
 
 cAttributeExists ::
   forall r _r k v.

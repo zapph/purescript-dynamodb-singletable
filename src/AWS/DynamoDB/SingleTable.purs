@@ -122,8 +122,8 @@ insertItem ::
 insertItem item conditionExprF = putItem { item, returnOld: false } finalKeyConditionF
   where
   finalKeyConditionF =
-    (conditionExprF <#> cAnd CE.cItemExists) <|>
-      (pure $ CE.cItemExists)
+    (conditionExprF <#> cAnd CE.cItemNotExists) <|>
+      (pure $ CE.cItemNotExists)
 
 putItem ::
   forall env a.
