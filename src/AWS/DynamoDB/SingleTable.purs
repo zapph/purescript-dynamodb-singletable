@@ -37,6 +37,7 @@ import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, STDbItem, STDbItem', SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, STDbItem, STDbItem', dbL) as E
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
+import Control.Alt ((<|>))
 import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
 import Data.Lens (view)
@@ -111,6 +112,18 @@ transactWriteItems opsFs = do
       }
   pure unit
 
+insertItem ::
+  forall env a.
+  HasSingleTableDb env =>
+  ItemCodec (STDbItem a) =>
+  STDbItem a ->
+  (Maybe (Condition (STDbItem' a))) ->
+  RIO env (Maybe (STDbItem a))
+insertItem item conditionExprF = putItem { item, returnOld: false } finalKeyConditionF
+  where
+  finalKeyConditionF =
+    (conditionExprF <#> cAnd CE.cItemExists) <|>
+      (pure $ CE.cItemExists)
 
 putItem ::
   forall env a.
@@ -119,12 +132,16 @@ putItem ::
   { item :: STDbItem a
   , returnOld :: Boolean
   } ->
+  (Maybe (Condition (STDbItem' a))) ->
   RIO env (Maybe (STDbItem a))
-putItem { item, returnOld } = do
+putItem { item, returnOld } condition = do
   table <- getTable
   res <- Cl.putItem
     { "Item": writeItem item
     , "TableName": table
+    , "ConditionExpression": maybeToUor conditionExpr
+    , "ExpressionAttributeNames": maybeToUor attributeNames
+    , "ExpressionAttributeValues": maybeToUor attributeValues
     , "ReturnValues":
       if returnOld
       then retValP (stringLit :: _ "ALL_OLD")
@@ -137,6 +154,8 @@ putItem { item, returnOld } = do
   where
     retValP :: forall r. Coercible r (StringLit "NONE" |+| StringLit "ALL_OLD") => r -> (StringLit "NONE" |+| StringLit "ALL_OLD")
     retValP = coerce
+
+    { value: conditionExpr, attributeNames, attributeValues } = CmdB.build $ sequence $ CE.buildParams <$> condition
 
 data UpdateReturnValues =
   URAllNew
@@ -381,6 +400,13 @@ type Repo a =
        { item :: {|a}
        , returnOld :: Boolean
        } ->
+       (Maybe (Condition a)) ->
+       RIO env (Maybe {|a})
+  , insertItem ::
+       forall env.
+       HasSingleTableDb env =>
+       {|a} ->
+       (Maybe (Condition a)) ->
        RIO env (Maybe {|a})
   , createOrUpdateItem ::
       forall env.
@@ -438,6 +464,7 @@ mkRepo =
   { getItem: getItem
   , deleteItem: deleteItem
   , putItem: putItem
+  , insertItem: insertItem
   , createOrUpdateItem
   , updateExistingItem: updateExistingItem -- todo disallow updates of pk, sk
   , query: query
