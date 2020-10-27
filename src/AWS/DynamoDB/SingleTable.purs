@@ -20,6 +20,7 @@ module AWS.DynamoDB.SingleTable
        , queryGsi2BySkPrefix
        , queryGsi3BySkPrefix
        , queryGsiNBySkPrefix
+       , class GetLastEvaluatedKeyRows
        , Repo
        , mkRepo
        , module E
@@ -340,8 +341,19 @@ class IndexValue a
 instance indexValueString :: IndexValue String
 instance indexValueMaybeString :: IndexValue (Maybe String)
 
+
+class GetLastEvaluatedKeyRows (pkName :: Symbol) (skName :: Symbol) (rows :: # Type) | pkName skName -> rows
+
+-- | This is for lastEvaluatedKey, since we know dynamodb returns { pk :: String, sk :: String } always
+-- | but returns additional secondary index primary key if you query against a secondary index { pk :: string, sk :: string , gsi1pk :: string, gsi1sk :: string }
+instance getLastEvaluatedKeyRows ::
+  ( Row.Cons pkName String ( pk :: String, sk :: String | withSkRow ) lekR
+  , Row.Cons skName String () withSkRow
+  , Row.Nub lekR lastEvaluatedKeyR
+  ) => GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR
+
 query ::
-  forall env a index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond.
+  forall env a index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond lastEvaluatedKeyR.
   HasSingleTableDb env =>
   IsSTDbIndex index pkName skName =>
   IndexValue pkValue =>
@@ -352,19 +364,27 @@ query ::
   Row.Cons pkName String skCond pkSkCond =>
   Row.Cons skName String () skCond =>
   Row.Union skCond _r3 pkSkCond =>
+  GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR =>
+  ItemCodec { | lastEvaluatedKeyR } =>
   ItemCodec (STDbItem a) =>
   index ->
   { pk :: String
   , skCondition :: Condition skCond
   , scanIndexForward :: Boolean
   } ->
-  RIO env (Array (STDbItem a))
+  RIO env { items :: Array (STDbItem a), lastEvaluatedKey :: Maybe { | lastEvaluatedKeyR } }
 query index { pk, skCondition, scanIndexForward } = do
   table <- getTable
   res <- Cl.query (params table)
-  traverse readItemOrErr res."Items"
+  items <- traverse readItemOrErr res."Items"
+  lastEvaluatedKey <- traverse readItemOrErrAVObject (uorToMaybe res."LastEvaluatedKey")
+  pure
+    { items
+    , lastEvaluatedKey
+    }
 
   where
+
 
     pkCondition :: Condition pkSkCond
     pkCondition = CE.opPath (SProxy :: _ pkName) `cEq` CE.opValue pk
@@ -427,7 +447,7 @@ type Repo a =
       PrimaryKey ->
       RIO env {|a}
   , query ::
-      forall env index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond.
+      forall env index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond lastEvaluatedKeyR.
       HasSingleTableDb env =>
       IsSTDbIndex index pkName skName =>
       IndexValue pkValue =>
@@ -438,13 +458,15 @@ type Repo a =
       Row.Cons pkName String skCond pkSkCond =>
       Row.Cons skName String () skCond =>
       Row.Union skCond _r3 pkSkCond =>
-      ItemCodec {|a} =>
+      GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR =>
+      ItemCodec { | lastEvaluatedKeyR } =>
+      ItemCodec { | a } =>
       index ->
       { pk :: String
       , skCondition :: Condition skCond
       , scanIndexForward :: Boolean
       } ->
-      RIO env (Array {|a})
+      RIO env { items :: Array { | a }, lastEvaluatedKey :: Maybe { | lastEvaluatedKeyR } }
   , txPutItem ::
       {|a} -> TransactWriteItemsOperationF
   , txDeleteItem ::
@@ -494,6 +516,16 @@ readItemOrErr ::
   Object AttributeValue ->
   m a
 readItemOrErr o = case readItem o of
+  Just a -> pure a
+  Nothing -> throwError $ error "unreadable item"
+
+readItemOrErrAVObject ::
+  forall m a.
+  MonadThrow Error m =>
+  ItemCodec a =>
+  AVObject ->
+  m a
+readItemOrErrAVObject (AVObject o) = case readItem o of
   Just a -> pure a
   Nothing -> throwError $ error "unreadable item"
 
