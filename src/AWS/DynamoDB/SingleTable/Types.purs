@@ -12,6 +12,7 @@ module AWS.DynamoDB.SingleTable.Types
        , Path
        , spToPath
        , pathToString
+       , TransactWriteItemsOperation
        ) where
 
 import Prelude
@@ -74,3 +75,5 @@ spToPath = Path <<< reflectSymbol
 
 pathToString :: forall r. Path r -> String
 pathToString (Path s) = s
+
+foreign import data TransactWriteItemsOperation :: Type

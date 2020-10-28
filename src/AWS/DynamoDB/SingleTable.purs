@@ -104,7 +104,7 @@ transactWriteItems ::
 transactWriteItems opsFs = do
   table <- getTable
   let
-    transactItems = opsFs <#> \opsF -> TWI.toTransactWriteItem $ opsF table
+    transactItems = opsFs <#> TWI.toTransactWriteItemOp table
   res <-
     Cl.transactWriteItems
       { "TransactItems": transactItems
