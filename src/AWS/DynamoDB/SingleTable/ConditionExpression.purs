@@ -3,6 +3,7 @@ module AWS.DynamoDB.SingleTable.ConditionExpression
        , Operand
        , class Comparable
        , cEq
+       , cNEq
        , cLt
        , cLtEq
        , cGt
@@ -89,6 +90,9 @@ else instance comparableIdentity :: Comparable a a
 
 cEq :: forall r v1 v2. Comparable v1 v2 => Operand r v1 -> Operand r v2 -> Condition r
 cEq = ccomp CompEq
+
+cNEq :: forall r v1 v2. Comparable v1 v2 => Operand r v1 -> Operand r v2 -> Condition r
+cNEq = ccomp CompNEq
 
 cLt :: forall r v1 v2. Comparable v1 v2 => Operand r v1 -> Operand r v2 -> Condition r
 cLt = ccomp CompLt
