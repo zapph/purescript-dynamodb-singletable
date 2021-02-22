@@ -2,6 +2,7 @@ module AWS.DynamoDB.SingleTable.AttributeValue where
 
 import Prelude
 
+import AWS.DynamoDB.SingleTable.Base64Encoded (Base64Encoded)
 import AWS.DynamoDB.SingleTable.Types (AttributeValue)
 import Data.DateTime (DateTime)
 import Data.Either (fromRight, hush)
@@ -31,7 +32,7 @@ import Unsafe.Coerce (unsafeCoerce)
 --
 -- "B": "dGhpcyB0ZXh0IGlzIGJhc2U2NC1lbmNvZGVk"
 -- Type: Base64-encoded binary data object
-avB :: String -> AttributeValue
+avB :: Base64Encoded -> AttributeValue
 avB v = unsafeCoerce { "B": v }
 
 -- BOOL
@@ -47,7 +48,7 @@ avBOOL v = unsafeCoerce { "BOOL": v }
 --
 -- "BS": ["U3Vubnk=", "UmFpbnk=", "U25vd3k="]
 -- Type: Array of Base64-encoded binary data objects
-avBS :: Array String -> AttributeValue
+avBS :: Array Base64Encoded -> AttributeValue
 avBS v = unsafeCoerce { "BS": v }
 
 -- L
@@ -107,9 +108,9 @@ avSS :: Array String -> AttributeValue
 avSS v = unsafeCoerce { "SS": v }
 
 type Handler a
- = { "B" :: String -> a
+ = { "B" :: Base64Encoded -> a
    , "BOOL" :: Boolean -> a
-   , "BS" :: Array String -> a
+   , "BS" :: Array Base64Encoded -> a
    , "L" :: Array AttributeValue -> a
    , "M" :: Object AttributeValue -> a
    , "N" :: String -> a
@@ -142,13 +143,13 @@ caseF f a = readAttributeValue (f constHandler)
       }
 
 
-caseB :: forall a. (String -> a) -> a -> AttributeValue -> a
+caseB :: forall a. (Base64Encoded -> a) -> a -> AttributeValue -> a
 caseB f = caseF (_ { "B" = f })
 
 caseBOOL :: forall a. (Boolean -> a) -> a -> AttributeValue -> a
 caseBOOL f = caseF (_ { "BOOL" = f })
 
-caseBS :: forall a. (Array String -> a) -> a -> AttributeValue -> a
+caseBS :: forall a. (Array Base64Encoded -> a) -> a -> AttributeValue -> a
 caseBS f = caseF (_ { "BS" = f })
 
 caseL :: forall a. (Array AttributeValue -> a) -> a -> AttributeValue -> a
@@ -189,15 +190,12 @@ unsafeReadNumber =
 
 --
 
-newtype Binary = B64 String
-derive newtype instance binaryEq :: Eq Binary
-derive newtype instance binaryOrd :: Ord Binary
+newtype AttributeValueTag = AttributeValueTag String
 
-toB64 :: Binary -> String
-toB64 (B64 s) = s
+derive newtype instance attributeValueTagEq :: Eq AttributeValueTag
+derive newtype instance attributeValueTagOrd :: Ord AttributeValueTag
 
-unsafeB64ToBinary :: String -> Binary
-unsafeB64ToBinary = B64
+--
 
 class AVCodec a where
   readAV :: AttributeValue -> Maybe a
@@ -207,13 +205,13 @@ instance avCodecId :: AVCodec AttributeValue where
   readAV = Just
   writeAV = identity
 
-instance avCodecBinary :: AVCodec Binary where
-  readAV = caseB (Just <<< unsafeB64ToBinary) Nothing
-  writeAV = avB <<< toB64
+instance avCodecBinary :: AVCodec Base64Encoded where
+  readAV = caseB Just Nothing
+  writeAV = avB
 
-instance avCodecBinarySet :: AVCodec (NonEmptySet Binary) where
-  readAV = caseBS (NonEmptySet.fromFoldable <<< map unsafeB64ToBinary) Nothing
-  writeAV = avBS <<< map toB64 <<< NonEmptySet.toUnfoldable
+instance avCodecBase64EncodedSet :: AVCodec (NonEmptySet Base64Encoded) where
+  readAV = caseBS NonEmptySet.fromFoldable Nothing
+  writeAV = avBS <<< NonEmptySet.toUnfoldable
 
 instance avCodecBoolean :: AVCodec Boolean where
   readAV = caseBOOL Just Nothing
