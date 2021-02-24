@@ -4,7 +4,7 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.Schema (type (:#:), IxValue, PkConst, PkDyn, PkHead1, mkIxValue, printIxValue)
+import AWS.DynamoDB.SingleTable.Schema (type (:#:), IxValue, IxConst, IxDyn, IxHead1, mkIxValue, printIxValue)
 import Effect.Aff (Aff)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
@@ -12,7 +12,7 @@ import Test.Spec.Assertions (shouldEqual)
 {-
 type Schema =
   ( repo :: RProxy
-       ( pk :: PkProxy (PkConst "REPO" :+: PkVar "repoName")
+       ( pk :: IxProxy (IxConst "REPO" :+: IxVar "repoName")
        , sk :: SkProxy (SkConst _20 "REPO")
        )
   )
@@ -20,20 +20,20 @@ type Schema =
 
 schemaSpec :: Spec Unit
 schemaSpec = describe "schema" do
-  pkSpec
+  ixSpec
 
-pkSpec :: Spec Unit
-pkSpec = describe "pk" do
-  it "should write single const pk" do
-    (mkIxValue {} :: _ (PkHead1 (PkConst "FOO")))
+ixSpec :: Spec Unit
+ixSpec = describe "ix" do
+  it "should write single const ix" do
+    (mkIxValue {} :: _ (IxHead1 (IxConst "FOO")))
       `shouldPrintAs` "FOO"
 
-  it "should write double const pk" do
-    (mkIxValue {} :: _ (PkConst "FOO" :#: PkHead1 (PkConst "BAR")))
+  it "should write double const ix" do
+    (mkIxValue {} :: _ (IxConst "FOO" :#: IxHead1 (IxConst "BAR")))
       `shouldPrintAs` "FOO#BAR"
 
-  it "should write const#dyn pk" do
-    (mkIxValue { bar: "baz" } :: _ (PkConst "FOO" :#: PkHead1 (PkDyn "bar" String)))
+  it "should write const#dyn ix" do
+    (mkIxValue { bar: "baz" } :: _ (IxConst "FOO" :#: IxHead1 (IxDyn "bar" String)))
       `shouldPrintAs` "FOO#_baz"
 
 shouldPrintAs :: forall l. IxValue l -> String -> Aff Unit
@@ -42,4 +42,4 @@ shouldPrintAs ixValue s =
 
 -- The ff should not compile
 
--- foo = mkIxValue {} :: _ (PkHead1 (PkConst "foo"))
+-- foo = mkIxValue {} :: _ (IxHead1 (IxConst "foo"))

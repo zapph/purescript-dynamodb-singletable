@@ -1,16 +1,16 @@
 module AWS.DynamoDB.SingleTable.Schema
        ( IxValue
        , printIxValue
-       , kind PkPart
-       , PkConst
-       , PkDyn
-       , PkPartProxy(..)
-       , kind PkList1
-       , PkCons1
-       , PkHead1
+       , kind IxPart
+       , IxConst
+       , IxDyn
+       , IxPartProxy(..)
+       , kind IxList1
+       , IxCons1
+       , IxHead1
        , type (:#:)
-       , class PkWritePart
-       , pkWritePart
+       , class IxWritePart
+       , ixWritePart
        , class MkIxValue
        , mkIxValue
        ) where
@@ -23,59 +23,59 @@ import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Prim.Row as Row
 import Record as Record
 
-newtype IxValue (l :: PkList1) = IxValue String
+newtype IxValue (l :: IxList1) = IxValue String
 
 printIxValue :: forall l. IxValue l -> String
 printIxValue (IxValue s) = s
 
-foreign import kind PkPart
-foreign import data PkConst :: Symbol -> PkPart
-foreign import data PkDyn :: Symbol -> Type -> PkPart
+foreign import kind IxPart
+foreign import data IxConst :: Symbol -> IxPart
+foreign import data IxDyn :: Symbol -> Type -> IxPart
 
-data PkPartProxy (p :: PkPart) = PkPartProxy
+data IxPartProxy (p :: IxPart) = IxPartProxy
 
-foreign import kind PkList1
-foreign import data PkCons1 :: PkPart -> PkList1 -> PkList1
-foreign import data PkHead1 :: PkPart -> PkList1
+foreign import kind IxList1
+foreign import data IxCons1 :: IxPart -> IxList1 -> IxList1
+foreign import data IxHead1 :: IxPart -> IxList1
 
-infixr 6 type PkCons1 as :#:
+infixr 6 type IxCons1 as :#:
 
-class PkWritePart (p :: PkPart) (r :: # Type) where
-  pkWritePart :: PkPartProxy p -> {|r} -> String
+class IxWritePart (p :: IxPart) (r :: # Type) where
+  ixWritePart :: IxPartProxy p -> {|r} -> String
 
-instance pkWritePartConst ::
+instance ixWritePartConst ::
   ( IsWordAllUpper1 s
   , IsSymbol s
-  ) => PkWritePart (PkConst s) r where
+  ) => IxWritePart (IxConst s) r where
 
-  pkWritePart _ _ = reflectSymbol (SProxy :: _ s)
+  ixWritePart _ _ = reflectSymbol (SProxy :: _ s)
 
-instance pkWritePartDyn ::
+instance ixWritePartDyn ::
   ( IsSymbol n
   , Row.Cons n t _r r
   , PrintDynText t
-  ) => PkWritePart (PkDyn n t) r where
+  ) => IxWritePart (IxDyn n t) r where
 
-  pkWritePart _ r =
+  ixWritePart _ r =
     "_" <> printDynText (Record.get (SProxy :: _ n) r)
 
-class MkIxValue (l :: PkList1) (r :: # Type) where
+class MkIxValue (l :: IxList1) (r :: # Type) where
   mkIxValue :: {|r} -> IxValue l
 
 instance mkIxValueHead1 ::
-  PkWritePart p r =>
-  MkIxValue (PkHead1 p) r where
+  IxWritePart p r =>
+  MkIxValue (IxHead1 p) r where
 
-  mkIxValue r = IxValue $ pkWritePart (PkPartProxy :: _ p) r
+  mkIxValue r = IxValue $ ixWritePart (IxPartProxy :: _ p) r
 
 instance mkIxValueCons1 ::
-  ( PkWritePart p r
+  ( IxWritePart p r
   , MkIxValue t r
   ) =>
-  MkIxValue (PkCons1 p t) r where
+  MkIxValue (IxCons1 p t) r where
 
   mkIxValue r =
     IxValue
-    $ pkWritePart (PkPartProxy :: _ p) r
+    $ ixWritePart (IxPartProxy :: _ p) r
     <> "#"
     <> printIxValue (mkIxValue r :: _ t)
