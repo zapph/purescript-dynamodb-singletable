@@ -1,12 +1,16 @@
 module AWS.DynamoDB.SingleTable.DynText
        ( NormalizedText
        , normalizeText
-       , class PrintDynText
-       , printDynText
+       , class KeySegmentCodec
+       , encodeKeySegment
+       , decodeKeySegment
        ) where
 
 import Prelude
 
+import Control.MonadPlus (guard)
+import Data.Int as Int
+import Data.Maybe (Maybe)
 import Data.String as String
 import Data.String.Regex (Regex)
 import Data.String.Regex as Regex
@@ -23,25 +27,30 @@ instance normalizedTextShow :: Show NormalizedText where
   show (NormalizedText s) = "(NormalizedText " <> s <> ")"
 
 normalizeText :: String -> NormalizedText
-normalizeText s =
-  NormalizedText
-  $ Regex.replace nonAlphanumG "_" (String.toLower (String.trim s))
+normalizeText = NormalizedText <<< normalizeText'
 
 printNormalizedText :: NormalizedText -> String
 printNormalizedText (NormalizedText s) = s
 
-class PrintDynText a where
-  printDynText :: a -> String
+class KeySegmentCodec a where
+  encodeKeySegment :: a -> String
+  decodeKeySegment :: String -> Maybe a
 
 -- this might cause issues later on since
 -- users might assume that the string is left
 -- untouched
-instance printDynTextString :: PrintDynText NormalizedText where
-  printDynText = printNormalizedText
+instance keySegmentCodecNormalizedText :: KeySegmentCodec NormalizedText where
+  encodeKeySegment = printNormalizedText
+  decodeKeySegment s = guard (normalizeText' s == s) $> NormalizedText s
 
 -- TODO zerofill
-instance printDynTextInt :: PrintDynText Int where
-  printDynText = show
+instance keySegmentCodecNormalizedTextInt :: KeySegmentCodec Int where
+  encodeKeySegment = show
+  decodeKeySegment = Int.fromString
 
 nonAlphanumG :: Regex
 nonAlphanumG = unsafeRegex "[^a-zA-Z0-9]+" RegexFlags.global
+
+normalizeText' :: String -> String
+normalizeText' s =
+  Regex.replace nonAlphanumG "_" (String.toLower (String.trim s))

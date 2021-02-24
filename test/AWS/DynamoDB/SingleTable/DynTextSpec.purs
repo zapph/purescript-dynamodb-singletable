@@ -4,31 +4,38 @@ module AWS.DynamoDB.SingleTable.DynTextSpec
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.DynText (normalizeText, printDynText)
-import Test.Spec (Spec, describe, it)
-import Test.Spec.Assertions (shouldEqual)
+import AWS.DynamoDB.SingleTable.DynText (class KeySegmentCodec, NormalizedText, decodeKeySegment, encodeKeySegment, normalizeText)
+import Data.Maybe (isNothing)
+import Effect.Aff (Aff)
+import Test.Spec (Spec, it)
+import Test.Spec.Assertions (shouldContain, shouldEqual, shouldSatisfy)
 
 dynTextSpec :: Spec Unit
 dynTextSpec = do
-  normalizedTextSpec
-
-normalizedTextSpec :: Spec Unit
-normalizedTextSpec = describe "DynText" do
   it "should accept empty strings" do
-    printNormal "" `shouldEqual` ""
+    testNormal "" ""
 
   it "should lowercase letters" do
-    printNormal "FooBARBAz" `shouldEqual` "foobarbaz"
+    testNormal "FooBARBAz" "foobarbaz"
 
   it "should trim text" do
-    printNormal "  foo " `shouldEqual` "foo"
+    testNormal "  foo " "foo"
 
   it "should replace non letter/digit with underscore" do
-    printNormal "Foo  BAR + BAz" `shouldEqual` "foo_bar_baz"
+    testNormal "Foo  BAR + BAz" "foo_bar_baz"
+
+  it "should refuse to decode imporper normalized text" do
+    (decodeKeySegment "FOO" :: _ NormalizedText) `shouldSatisfy` isNothing
 
   -- TODO zerofill
   it "should print integers" do
-    printDynText 1 `shouldEqual` "1"
+    testKeySegment 1 "1"
 
-printNormal :: String -> String
-printNormal = printDynText <<< normalizeText
+testNormal :: String -> String -> Aff Unit
+testNormal given exp =
+  testKeySegment (normalizeText given) exp
+
+testKeySegment :: forall a. KeySegmentCodec a => Show a => Eq a => a -> String -> Aff Unit
+testKeySegment given exp = do
+  encodeKeySegment given `shouldEqual` exp
+  decodeKeySegment exp `shouldContain` given
