@@ -8,6 +8,8 @@ module AWS.DynamoDB.SingleTable.Schema
        , kind IxList1
        , IxCons1
        , IxHead1
+       , IxConsLast
+       , type (:#)
        , type (:#:)
        , class IxWritePart
        , ixWritePart
@@ -38,7 +40,10 @@ foreign import kind IxList1
 foreign import data IxCons1 :: IxPart -> IxList1 -> IxList1
 foreign import data IxHead1 :: IxPart -> IxList1
 
-infixr 6 type IxCons1 as :#:
+type IxConsLast h l = IxCons1 h (IxHead1 l)
+
+infixr 6 type IxCons1 as :#
+infixr 6 type IxConsLast as :#:
 
 class IxWritePart (p :: IxPart) (r :: # Type) where
   ixWritePart :: IxPartProxy p -> {|r} -> String
