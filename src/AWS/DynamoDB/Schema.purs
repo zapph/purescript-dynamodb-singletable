@@ -1,5 +1,7 @@
 module AWS.DynamoDB.SingleTable.Schema
-       ( kind PkPart
+       ( IxValue
+       , printIxValue
+       , kind PkPart
        , PkConst
        , PkDyn
        , PkPartProxy(..)
@@ -7,11 +9,10 @@ module AWS.DynamoDB.SingleTable.Schema
        , PkCons1
        , PkHead1
        , type (:#:)
-       , PkList1Proxy(..)
        , class PkWritePart
        , pkWritePart
-       , class PkWrite
-       , pkWrite
+       , class MkIxValue
+       , mkIxValue
        ) where
 
 import Prelude
@@ -21,6 +22,11 @@ import AWS.DynamoDB.SingleTable.Utils.SymbolUtils (class IsWordAllUpper1)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Prim.Row as Row
 import Record as Record
+
+newtype IxValue (l :: PkList1) = IxValue String
+
+printIxValue :: forall l. IxValue l -> String
+printIxValue (IxValue s) = s
 
 foreign import kind PkPart
 foreign import data PkConst :: Symbol -> PkPart
@@ -33,8 +39,6 @@ foreign import data PkCons1 :: PkPart -> PkList1 -> PkList1
 foreign import data PkHead1 :: PkPart -> PkList1
 
 infixr 6 type PkCons1 as :#:
-
-data PkList1Proxy (l :: PkList1) = PkList1Proxy
 
 class PkWritePart (p :: PkPart) (r :: # Type) where
   pkWritePart :: PkPartProxy p -> {|r} -> String
@@ -55,24 +59,23 @@ instance pkWritePartDyn ::
   pkWritePart _ r =
     "_" <> printDynText (Record.get (SProxy :: _ n) r)
 
-class PkWrite (l :: PkList1) (r :: # Type) where
-  pkWrite :: PkList1Proxy l -> {|r} -> String
+class MkIxValue (l :: PkList1) (r :: # Type) where
+  mkIxValue :: {|r} -> IxValue l
 
-instance pkWriteHead1 ::
+instance mkIxValueHead1 ::
   PkWritePart p r =>
-  PkWrite (PkHead1 p) r where
+  MkIxValue (PkHead1 p) r where
 
-  pkWrite _ = pkWritePart (PkPartProxy :: _ p)
+  mkIxValue r = IxValue $ pkWritePart (PkPartProxy :: _ p) r
 
-instance pkWriteCons1 ::
+instance mkIxValueCons1 ::
   ( PkWritePart p r
-  , PkWrite t r
+  , MkIxValue t r
   ) =>
-  PkWrite (PkCons1 p t) r where
+  MkIxValue (PkCons1 p t) r where
 
-  pkWrite _ r =
-    pkWritePart (PkPartProxy :: _ p) r
+  mkIxValue r =
+    IxValue
+    $ pkWritePart (PkPartProxy :: _ p) r
     <> "#"
-    <> pkWrite (PkList1Proxy :: _ t) r
-
---pkApp :: forall h t. PkApp
+    <> printIxValue (mkIxValue r :: _ t)
