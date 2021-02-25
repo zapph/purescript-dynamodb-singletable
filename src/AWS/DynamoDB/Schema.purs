@@ -1,6 +1,6 @@
 module AWS.DynamoDB.SingleTable.Schema
-       ( KeyValue
-       , printKeyValue
+       ( Key
+       , printKey
        , kind KeyPart
        , KeyConst
        , KeyDyn
@@ -16,13 +16,13 @@ module AWS.DynamoDB.SingleTable.Schema
        , keyWritePart
        , class KeyReadPart
        , keyReadPart
-       , class MkKeyValue
-       , mkKeyValue
-       , class ReadKeyValue
-       , readKeyValue'
-       , readKeyValue
-       , readKeyValue_
-       , readKeyValueContent
+       , class MkKey
+       , mkKey
+       , class ReadKey
+       , readKey'
+       , readKey
+       , readKey_
+       , readKeyContent
        ) where
 
 import Prelude
@@ -39,16 +39,16 @@ import Prim.Row as Row
 import Record as Record
 import Record.Builder as RecordBuilder
 
-newtype KeyValue (l :: KeyList1) = KeyValue String
+newtype Key (l :: KeyList1) = Key String
 
-derive instance keyValueEq :: Eq (KeyValue l)
-derive instance keyValueOrd :: Ord (KeyValue l)
+derive instance keyEq :: Eq (Key l)
+derive instance keyOrd :: Ord (Key l)
 
-instance keyValueShow :: Show (KeyValue l) where
-  show (KeyValue s) = "(KeyValue " <> s <> ")"
+instance keyShow :: Show (Key l) where
+  show (Key s) = "(Key " <> s <> ")"
 
-printKeyValue :: forall l. KeyValue l -> String
-printKeyValue (KeyValue s) = s
+printKey :: forall l. Key l -> String
+printKey (Key s) = s
 
 foreign import kind KeyPart
 foreign import data KeyConst :: Symbol -> KeyPart
@@ -113,74 +113,74 @@ instance keyReadPartDyn ::
         Nothing
 
 
-class MkKeyValue (l :: KeyList1) (r :: # Type) | l -> r where
-  mkKeyValue :: {|r} -> KeyValue l
+class MkKey (l :: KeyList1) (r :: # Type) | l -> r where
+  mkKey :: {|r} -> Key l
 
-instance mkKeyValueLast1 ::
+instance mkKeyLast1 ::
   KeyWritePart p r =>
-  MkKeyValue (KeyLast1 p) r where
+  MkKey (KeyLast1 p) r where
 
-  mkKeyValue r = KeyValue $ keyWritePart (KeyPartProxy :: _ p) r
+  mkKey r = Key $ keyWritePart (KeyPartProxy :: _ p) r
 
-instance mkKeyValueCons1 ::
+instance mkKeyCons1 ::
   ( KeyWritePart p r
-  , MkKeyValue t r
+  , MkKey t r
   ) =>
-  MkKeyValue (KeyCons1 p t) r where
+  MkKey (KeyCons1 p t) r where
 
-  mkKeyValue r =
-    KeyValue
+  mkKey r =
+    Key
     $ keyWritePart (KeyPartProxy :: _ p) r
     <> "#"
-    <> printKeyValue (mkKeyValue r :: _ t)
+    <> printKey (mkKey r :: _ t)
 
-class ReadKeyValue (l :: KeyList1) (r1 :: # Type) (r2 :: # Type) | l -> r1 r2 where
-  readKeyValue' :: KeyList1Proxy l -> Array String -> Int -> Maybe (RecordBuilder.Builder {|r1} {|r2})
+class ReadKey (l :: KeyList1) (r1 :: # Type) (r2 :: # Type) | l -> r1 r2 where
+  readKey' :: KeyList1Proxy l -> Array String -> Int -> Maybe (RecordBuilder.Builder {|r1} {|r2})
 
-instance readKeyValueLast1 ::
+instance readKeyLast1 ::
   KeyReadPart p r1 r2 =>
-  ReadKeyValue (KeyLast1 p) r1 r2 where
+  ReadKey (KeyLast1 p) r1 r2 where
 
-  readKeyValue' _ as ndx = do
+  readKey' _ as ndx = do
     guard (Array.length as == ndx + 1)
     (as !! ndx) >>= keyReadPart (KeyPartProxy :: _ p)
 
-instance readKeyValueCons1 ::
+instance readKeyCons1 ::
   ( KeyReadPart p r1 r2
-  , ReadKeyValue t r2 r3
+  , ReadKey t r2 r3
   ) =>
-  ReadKeyValue (KeyCons1 p t) r1 r3 where
+  ReadKey (KeyCons1 p t) r1 r3 where
 
-  readKeyValue' _ as ndx =
+  readKey' _ as ndx =
     (>>>)
     <$> ((as !! ndx) >>= keyReadPart (KeyPartProxy :: _ p))
-    <*> readKeyValue' (KeyList1Proxy :: _ t) as (ndx + 1)
+    <*> readKey' (KeyList1Proxy :: _ t) as (ndx + 1)
 
-readKeyValue ::
+readKey ::
   forall l r.
-  ReadKeyValue l () r =>
+  ReadKey l () r =>
   String ->
-  Maybe { value :: KeyValue l, r :: {|r} }
-readKeyValue s = b <#> \b' ->
-  { value: KeyValue s
+  Maybe { value :: Key l, r :: {|r} }
+readKey s = b <#> \b' ->
+  { value: Key s
   , r: RecordBuilder.build b' {}
   }
   where
-    b = readKeyValue' (KeyList1Proxy :: _ l) (String.split (String.Pattern "#") s) 0
+    b = readKey' (KeyList1Proxy :: _ l) (String.split (String.Pattern "#") s) 0
 
-readKeyValue_ ::
+readKey_ ::
   forall l r.
-  ReadKeyValue l () r =>
+  ReadKey l () r =>
   String ->
-  Maybe (KeyValue l)
-readKeyValue_ s = _.value <$> readKeyValue s
+  Maybe (Key l)
+readKey_ s = _.value <$> readKey s
 
-readKeyValueContent ::
+readKeyContent ::
   forall l r.
-  ReadKeyValue l () r =>
+  ReadKey l () r =>
   KeyList1Proxy l ->
   String ->
   Maybe {|r}
-readKeyValueContent p s = _.r <$> read
+readKeyContent p s = _.r <$> read
   where
-    read = readKeyValue s :: _ { value :: KeyValue l, r :: {|r} }
+    read = readKey s :: _ { value :: Key l, r :: {|r} }
