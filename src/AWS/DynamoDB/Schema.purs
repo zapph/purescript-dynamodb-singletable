@@ -1,10 +1,10 @@
 module AWS.DynamoDB.SingleTable.Schema
        ( Key
        , printKey
-       , kind KeyPart
+       , kind KeySegment
        , KeyConst
        , KeyDyn
-       , KeyPartProxy(..)
+       , KeySegmentProxy(..)
        , kind KeyList1
        , KeyCons1
        , KeyLast1
@@ -12,10 +12,10 @@ module AWS.DynamoDB.SingleTable.Schema
        , KeyList1Proxy(..)
        , type (:#)
        , type (:#:)
-       , class KeyWritePart
-       , keyWritePart
-       , class KeyReadPart
-       , keyReadPart
+       , class WriteKeySegment
+       , writeKeySegment
+       , class ReadKeySegment
+       , readKeySegment
        , class MkKey
        , mkKey
        , class ReadKey
@@ -50,16 +50,16 @@ instance keyShow :: Show (Key l) where
 printKey :: forall l. Key l -> String
 printKey (Key s) = s
 
-foreign import kind KeyPart
-foreign import data KeyConst :: Symbol -> KeyPart
-foreign import data KeyDyn :: Symbol -> Type -> KeyPart
+foreign import kind KeySegment
+foreign import data KeyConst :: Symbol -> KeySegment
+foreign import data KeyDyn :: Symbol -> Type -> KeySegment
 
-data KeyPartProxy (p :: KeyPart) = KeyPartProxy
+data KeySegmentProxy (p :: KeySegment) = KeySegmentProxy
 
 -- TODO rename Last1 -> Last1
 foreign import kind KeyList1
-foreign import data KeyCons1 :: KeyPart -> KeyList1 -> KeyList1
-foreign import data KeyLast1 :: KeyPart -> KeyList1
+foreign import data KeyCons1 :: KeySegment -> KeyList1 -> KeyList1
+foreign import data KeyLast1 :: KeySegment -> KeyList1
 
 type KeyConsLast h l = KeyCons1 h (KeyLast1 l)
 
@@ -68,44 +68,44 @@ infixr 6 type KeyConsLast as :#:
 
 data KeyList1Proxy (l :: KeyList1) = KeyList1Proxy
 
-class KeyWritePart (p :: KeyPart) (r :: # Type) where
-  keyWritePart :: KeyPartProxy p -> {|r} -> String
+class WriteKeySegment (p :: KeySegment) (r :: # Type) where
+  writeKeySegment :: KeySegmentProxy p -> {|r} -> String
 
-instance keyWritePartConst ::
+instance writeKeySegmentConst ::
   ( IsWordAllUpper1 s
   , IsSymbol s
-  ) => KeyWritePart (KeyConst s) r where
+  ) => WriteKeySegment (KeyConst s) r where
 
-  keyWritePart _ _ = reflectSymbol (SProxy :: _ s)
+  writeKeySegment _ _ = reflectSymbol (SProxy :: _ s)
 
-instance keyWritePartDyn ::
+instance writeKeySegmentDyn ::
   ( IsSymbol n
   , Row.Cons n t _r r
   , KeySegmentCodec t
-  ) => KeyWritePart (KeyDyn n t) r where
+  ) => WriteKeySegment (KeyDyn n t) r where
 
-  keyWritePart _ r =
+  writeKeySegment _ r =
     "_" <> encodeKeySegment (Record.get (SProxy :: _ n) r)
 
-class KeyReadPart (p :: KeyPart) (r1 :: # Type) (r2 :: # Type) | p -> r1 r2 where
-  keyReadPart :: KeyPartProxy p -> String -> Maybe (RecordBuilder.Builder {|r1} {|r2})
+class ReadKeySegment (p :: KeySegment) (r1 :: # Type) (r2 :: # Type) | p -> r1 r2 where
+  readKeySegment :: KeySegmentProxy p -> String -> Maybe (RecordBuilder.Builder {|r1} {|r2})
 
-instance keyReadPartConst ::
+instance readKeySegmentConst ::
   ( IsWordAllUpper1 s
   , IsSymbol s
-  ) => KeyReadPart (KeyConst s) r r where
+  ) => ReadKeySegment (KeyConst s) r r where
 
-  keyReadPart _ s =
+  readKeySegment _ s =
     guard (s == reflectSymbol (SProxy :: _ s)) $> identity
 
-instance keyReadPartDyn ::
+instance readKeySegmentDyn ::
   ( IsSymbol n
   , Row.Cons n t r1 r2
   , Row.Lacks n r1
   , KeySegmentCodec t
-  ) => KeyReadPart (KeyDyn n t) r1 r2 where
+  ) => ReadKeySegment (KeyDyn n t) r1 r2 where
 
-  keyReadPart _ s =
+  readKeySegment _ s =
     case String.splitAt 1 s of
       { before: "_", after } ->
         decodeKeySegment after <#> RecordBuilder.insert (SProxy :: _ n)
@@ -117,20 +117,20 @@ class MkKey (l :: KeyList1) (r :: # Type) | l -> r where
   mkKey :: {|r} -> Key l
 
 instance mkKeyLast1 ::
-  KeyWritePart p r =>
+  WriteKeySegment p r =>
   MkKey (KeyLast1 p) r where
 
-  mkKey r = Key $ keyWritePart (KeyPartProxy :: _ p) r
+  mkKey r = Key $ writeKeySegment (KeySegmentProxy :: _ p) r
 
 instance mkKeyCons1 ::
-  ( KeyWritePart p r
+  ( WriteKeySegment p r
   , MkKey t r
   ) =>
   MkKey (KeyCons1 p t) r where
 
   mkKey r =
     Key
-    $ keyWritePart (KeyPartProxy :: _ p) r
+    $ writeKeySegment (KeySegmentProxy :: _ p) r
     <> "#"
     <> printKey (mkKey r :: _ t)
 
@@ -138,22 +138,22 @@ class ReadKey (l :: KeyList1) (r1 :: # Type) (r2 :: # Type) | l -> r1 r2 where
   readKey' :: KeyList1Proxy l -> Array String -> Int -> Maybe (RecordBuilder.Builder {|r1} {|r2})
 
 instance readKeyLast1 ::
-  KeyReadPart p r1 r2 =>
+  ReadKeySegment p r1 r2 =>
   ReadKey (KeyLast1 p) r1 r2 where
 
   readKey' _ as ndx = do
     guard (Array.length as == ndx + 1)
-    (as !! ndx) >>= keyReadPart (KeyPartProxy :: _ p)
+    (as !! ndx) >>= readKeySegment (KeySegmentProxy :: _ p)
 
 instance readKeyCons1 ::
-  ( KeyReadPart p r1 r2
+  ( ReadKeySegment p r1 r2
   , ReadKey t r2 r3
   ) =>
   ReadKey (KeyCons1 p t) r1 r3 where
 
   readKey' _ as ndx =
     (>>>)
-    <$> ((as !! ndx) >>= keyReadPart (KeyPartProxy :: _ p))
+    <$> ((as !! ndx) >>= readKeySegment (KeySegmentProxy :: _ p))
     <*> readKey' (KeyList1Proxy :: _ t) as (ndx + 1)
 
 readKey ::
