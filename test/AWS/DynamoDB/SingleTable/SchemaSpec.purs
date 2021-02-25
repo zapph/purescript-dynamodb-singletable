@@ -5,7 +5,7 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 import Prelude
 
 import AWS.DynamoDB.SingleTable.DynText (NormalizedText, normalizeText)
-import AWS.DynamoDB.SingleTable.Schema (class MkKey, class ReadKey, type (:#), type (:#:), Key, KeyConst, KeyDyn, KeyLast1, KeyList1Proxy(..), mkKey, printKey, readKey, readKey_)
+import AWS.DynamoDB.SingleTable.Schema (class MkKey, class ReadKey, type (:#:), KC, KD, KNil, Key, KeySegmentListProxy, kp, mkKey, printKey, readKey, readKey_)
 import Data.Maybe (isNothing)
 import Effect.Aff (Aff)
 import Test.Spec (Spec, describe, it)
@@ -28,30 +28,30 @@ schemaSpec = describe "schema" do
 keyWriteSpec :: Spec Unit
 keyWriteSpec = describe "key write" do
   it "should write single const key" do
-    (mkKey {} :: _ (KeyLast1 (KeyConst "FOO")))
+    (mkKey {} :: _ (KC "FOO" :#: KNil))
       `shouldPrintAs` "FOO"
 
   it "should write double const key" do
-    (mkKey {} :: _ (KeyConst "FOO" :#: KeyConst "BAR"))
+    (mkKey {} :: _ (KC "FOO" :#: KC "BAR" :#: KNil))
       `shouldPrintAs` "FOO#BAR"
 
   it "should write const#dyn#const key" do
-    (mkKey { bar: normalizeText "baz" } :: _ (KeyConst "FOO" :# KeyDyn "bar" NormalizedText :#: KeyConst "QUX"))
+    (mkKey { bar: normalizeText "baz" } :: _ (KC "FOO" :#: KD "bar" NormalizedText :#: KC "QUX" :#: KNil))
       `shouldPrintAs` "FOO#_baz#QUX"
 
 keyReadSpec :: Spec Unit
 keyReadSpec = describe "key read" do
   it "roundtrip" do
-    testRoundtrip (p :: _ (KeyLast1 (KeyConst "FOO"))) {}
-    testRoundtrip (p :: _ (KeyConst "FOO" :#: KeyConst "BAR")) {}
-    testRoundtrip (p :: _ (KeyConst "FOO" :# KeyDyn "bar" NormalizedText :#: KeyConst "QUX")) { bar: normalizeText "baz" }
+    testRoundtrip (kp :: _ (KC "FOO" :#: KNil)) {}
+    testRoundtrip (kp :: _ (KC "FOO" :#: KC "BAR" :#: KNil)) {}
+    testRoundtrip (kp :: _ (KC "FOO" :#: KD "bar" NormalizedText :#: KC "QUX"  :#: KNil)) { bar: normalizeText "baz" }
 
   it "should fail on const mismatch" do
-    (readKey_ "BAR" :: _  (_ (KeyLast1 (KeyConst "FOO"))))
+    (readKey_ "BAR" :: _  (_ (KC "FOO" :#: KNil)))
       `shouldSatisfy` isNothing
 
   it "should fail on wrong length" do
-    (readKey_ "FOO#BAR#BAZ" :: _ (_ (KeyConst "FOO" :#: KeyConst "BAR")))
+    (readKey_ "FOO#BAR#BAZ" :: _ (_ (KC "FOO" :#: KC "BAR" :#: KNil)))
       `shouldSatisfy` isNothing
 
 shouldPrintAs :: forall l. Key l -> String -> Aff Unit
@@ -64,7 +64,7 @@ testRoundtrip ::
   ReadKey l () r =>
   Show {|r} =>
   Eq {|r} =>
-  KeyList1Proxy l ->
+  KeySegmentListProxy l ->
   {|r} ->
   Aff Unit
 testRoundtrip _ r =
@@ -73,8 +73,6 @@ testRoundtrip _ r =
     value = mkKey r :: _ l
     s = printKey value
 
-p :: forall l. KeyList1Proxy l
-p = KeyList1Proxy
 -- The ff should not compile
 
--- foo = mkKey {} :: _ (KeyLast1 (KeyConst "foo"))
+-- foo = mkKey {} :: _ (KC "foo" :#: KNil)
