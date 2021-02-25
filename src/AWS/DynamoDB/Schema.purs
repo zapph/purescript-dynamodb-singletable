@@ -115,24 +115,25 @@ instance readKeySegmentDyn ::
 class MkKey (l :: KeySegmentList) (r :: # Type) | l -> r where
   mkKey' :: KeySegmentListProxy l -> {|r} -> String
 
-instance mkKeyNil ::
-  MkKey KNil r where
+instance mkKeyLast ::
+  WriteKeySegment p r =>
+  MkKey (KCons p KNil) r where
 
-  mkKey' _ r = ""
+  mkKey' _ r = writeKeySegment (KeySegmentProxy :: _ p) r
 
-instance mkKeyCons1 ::
+else instance mkKeyCons1 ::
   ( WriteKeySegment p r
   , MkKey t r
   ) =>
   MkKey (KCons p t) r where
 
   mkKey' _ r =
-    "#"
-    <> writeKeySegment (KeySegmentProxy :: _ p) r
+    writeKeySegment (KeySegmentProxy :: _ p) r
+    <> "#"
     <> mkKey' (KeySegmentListProxy :: _ t) r
 
 mkKey :: forall l r. MkKey l r => {|r} -> Key l
-mkKey r = Key $ String.drop 1 (mkKey' (kp :: _ l) r)
+mkKey r = Key $ mkKey' (kp :: _ l) r
 
 class ReadKey (l :: KeySegmentList) (r1 :: # Type) (r2 :: # Type) | l -> r1 r2 where
   readKey' :: KeySegmentListProxy l -> Array String -> Int -> Maybe (RecordBuilder.Builder {|r1} {|r2})
