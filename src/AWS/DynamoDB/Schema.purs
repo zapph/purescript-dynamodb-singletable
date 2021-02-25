@@ -7,7 +7,7 @@ module AWS.DynamoDB.SingleTable.Schema
        , IxPartProxy(..)
        , kind IxList1
        , IxCons1
-       , IxHead1
+       , IxLast1
        , IxConsLast
        , IxList1Proxy(..)
        , type (:#)
@@ -56,12 +56,12 @@ foreign import data IxDyn :: Symbol -> Type -> IxPart
 
 data IxPartProxy (p :: IxPart) = IxPartProxy
 
--- TODO rename Head1 -> Last1
+-- TODO rename Last1 -> Last1
 foreign import kind IxList1
 foreign import data IxCons1 :: IxPart -> IxList1 -> IxList1
-foreign import data IxHead1 :: IxPart -> IxList1
+foreign import data IxLast1 :: IxPart -> IxList1
 
-type IxConsLast h l = IxCons1 h (IxHead1 l)
+type IxConsLast h l = IxCons1 h (IxLast1 l)
 
 infixr 6 type IxCons1 as :#
 infixr 6 type IxConsLast as :#:
@@ -116,9 +116,9 @@ instance ixReadPartDyn ::
 class MkIxValue (l :: IxList1) (r :: # Type) | l -> r where
   mkIxValue :: {|r} -> IxValue l
 
-instance mkIxValueHead1 ::
+instance mkIxValueLast1 ::
   IxWritePart p r =>
-  MkIxValue (IxHead1 p) r where
+  MkIxValue (IxLast1 p) r where
 
   mkIxValue r = IxValue $ ixWritePart (IxPartProxy :: _ p) r
 
@@ -137,9 +137,9 @@ instance mkIxValueCons1 ::
 class ReadIxValue (l :: IxList1) (r1 :: # Type) (r2 :: # Type) | l -> r1 r2 where
   readIxValue' :: IxList1Proxy l -> Array String -> Int -> Maybe (RecordBuilder.Builder {|r1} {|r2})
 
-instance readIxValueHead1 ::
+instance readIxValueLast1 ::
   IxReadPart p r1 r2 =>
-  ReadIxValue (IxHead1 p) r1 r2 where
+  ReadIxValue (IxLast1 p) r1 r2 where
 
   readIxValue' _ as ndx = do
     guard (Array.length as == ndx + 1)

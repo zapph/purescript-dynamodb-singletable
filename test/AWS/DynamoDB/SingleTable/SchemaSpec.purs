@@ -5,7 +5,7 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 import Prelude
 
 import AWS.DynamoDB.SingleTable.DynText (NormalizedText, normalizeText)
-import AWS.DynamoDB.SingleTable.Schema (class MkIxValue, class ReadIxValue, type (:#), type (:#:), IxConst, IxDyn, IxHead1, IxList1Proxy(..), IxValue, mkIxValue, printIxValue, readIxValue, readIxValue_)
+import AWS.DynamoDB.SingleTable.Schema (class MkIxValue, class ReadIxValue, type (:#), type (:#:), IxConst, IxDyn, IxLast1, IxList1Proxy(..), IxValue, mkIxValue, printIxValue, readIxValue, readIxValue_)
 import Data.Maybe (isNothing)
 import Effect.Aff (Aff)
 import Test.Spec (Spec, describe, it)
@@ -28,7 +28,7 @@ schemaSpec = describe "schema" do
 ixWriteSpec :: Spec Unit
 ixWriteSpec = describe "ix write" do
   it "should write single const ix" do
-    (mkIxValue {} :: _ (IxHead1 (IxConst "FOO")))
+    (mkIxValue {} :: _ (IxLast1 (IxConst "FOO")))
       `shouldPrintAs` "FOO"
 
   it "should write double const ix" do
@@ -42,12 +42,12 @@ ixWriteSpec = describe "ix write" do
 ixReadSpec :: Spec Unit
 ixReadSpec = describe "ix read" do
   it "roundtrip" do
-    testRoundtrip (p :: _ (IxHead1 (IxConst "FOO"))) {}
+    testRoundtrip (p :: _ (IxLast1 (IxConst "FOO"))) {}
     testRoundtrip (p :: _ (IxConst "FOO" :#: IxConst "BAR")) {}
     testRoundtrip (p :: _ (IxConst "FOO" :# IxDyn "bar" NormalizedText :#: IxConst "QUX")) { bar: normalizeText "baz" }
 
   it "should fail on const mismatch" do
-    (readIxValue_ "BAR" :: _  (_ (IxHead1 (IxConst "FOO"))))
+    (readIxValue_ "BAR" :: _  (_ (IxLast1 (IxConst "FOO"))))
       `shouldSatisfy` isNothing
 
   it "should fail on wrong length" do
@@ -77,4 +77,4 @@ p :: forall l. IxList1Proxy l
 p = IxList1Proxy
 -- The ff should not compile
 
--- foo = mkIxValue {} :: _ (IxHead1 (IxConst "foo"))
+-- foo = mkIxValue {} :: _ (IxLast1 (IxConst "foo"))
