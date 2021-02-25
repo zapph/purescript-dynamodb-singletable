@@ -1,28 +1,28 @@
 module AWS.DynamoDB.SingleTable.Schema
-       ( IxValue
-       , printIxValue
-       , kind IxPart
-       , IxConst
-       , IxDyn
-       , IxPartProxy(..)
-       , kind IxList1
-       , IxCons1
-       , IxLast1
-       , IxConsLast
-       , IxList1Proxy(..)
+       ( KeyValue
+       , printKeyValue
+       , kind KeyPart
+       , KeyConst
+       , KeyDyn
+       , KeyPartProxy(..)
+       , kind KeyList1
+       , KeyCons1
+       , KeyLast1
+       , KeyConsLast
+       , KeyList1Proxy(..)
        , type (:#)
        , type (:#:)
-       , class IxWritePart
-       , ixWritePart
-       , class IxReadPart
-       , ixReadPart
-       , class MkIxValue
-       , mkIxValue
-       , class ReadIxValue
-       , readIxValue'
-       , readIxValue
-       , readIxValue_
-       , readIxValueContent
+       , class KeyWritePart
+       , keyWritePart
+       , class KeyReadPart
+       , keyReadPart
+       , class MkKeyValue
+       , mkKeyValue
+       , class ReadKeyValue
+       , readKeyValue'
+       , readKeyValue
+       , readKeyValue_
+       , readKeyValueContent
        ) where
 
 import Prelude
@@ -39,73 +39,73 @@ import Prim.Row as Row
 import Record as Record
 import Record.Builder as RecordBuilder
 
-newtype IxValue (l :: IxList1) = IxValue String
+newtype KeyValue (l :: KeyList1) = KeyValue String
 
-derive instance ixValueEq :: Eq (IxValue l)
-derive instance ixValueOrd :: Ord (IxValue l)
+derive instance keyValueEq :: Eq (KeyValue l)
+derive instance keyValueOrd :: Ord (KeyValue l)
 
-instance ixValueShow :: Show (IxValue l) where
-  show (IxValue s) = "(IxValue " <> s <> ")"
+instance keyValueShow :: Show (KeyValue l) where
+  show (KeyValue s) = "(KeyValue " <> s <> ")"
 
-printIxValue :: forall l. IxValue l -> String
-printIxValue (IxValue s) = s
+printKeyValue :: forall l. KeyValue l -> String
+printKeyValue (KeyValue s) = s
 
-foreign import kind IxPart
-foreign import data IxConst :: Symbol -> IxPart
-foreign import data IxDyn :: Symbol -> Type -> IxPart
+foreign import kind KeyPart
+foreign import data KeyConst :: Symbol -> KeyPart
+foreign import data KeyDyn :: Symbol -> Type -> KeyPart
 
-data IxPartProxy (p :: IxPart) = IxPartProxy
+data KeyPartProxy (p :: KeyPart) = KeyPartProxy
 
 -- TODO rename Last1 -> Last1
-foreign import kind IxList1
-foreign import data IxCons1 :: IxPart -> IxList1 -> IxList1
-foreign import data IxLast1 :: IxPart -> IxList1
+foreign import kind KeyList1
+foreign import data KeyCons1 :: KeyPart -> KeyList1 -> KeyList1
+foreign import data KeyLast1 :: KeyPart -> KeyList1
 
-type IxConsLast h l = IxCons1 h (IxLast1 l)
+type KeyConsLast h l = KeyCons1 h (KeyLast1 l)
 
-infixr 6 type IxCons1 as :#
-infixr 6 type IxConsLast as :#:
+infixr 6 type KeyCons1 as :#
+infixr 6 type KeyConsLast as :#:
 
-data IxList1Proxy (l :: IxList1) = IxList1Proxy
+data KeyList1Proxy (l :: KeyList1) = KeyList1Proxy
 
-class IxWritePart (p :: IxPart) (r :: # Type) where
-  ixWritePart :: IxPartProxy p -> {|r} -> String
+class KeyWritePart (p :: KeyPart) (r :: # Type) where
+  keyWritePart :: KeyPartProxy p -> {|r} -> String
 
-instance ixWritePartConst ::
+instance keyWritePartConst ::
   ( IsWordAllUpper1 s
   , IsSymbol s
-  ) => IxWritePart (IxConst s) r where
+  ) => KeyWritePart (KeyConst s) r where
 
-  ixWritePart _ _ = reflectSymbol (SProxy :: _ s)
+  keyWritePart _ _ = reflectSymbol (SProxy :: _ s)
 
-instance ixWritePartDyn ::
+instance keyWritePartDyn ::
   ( IsSymbol n
   , Row.Cons n t _r r
   , KeySegmentCodec t
-  ) => IxWritePart (IxDyn n t) r where
+  ) => KeyWritePart (KeyDyn n t) r where
 
-  ixWritePart _ r =
+  keyWritePart _ r =
     "_" <> encodeKeySegment (Record.get (SProxy :: _ n) r)
 
-class IxReadPart (p :: IxPart) (r1 :: # Type) (r2 :: # Type) | p -> r1 r2 where
-  ixReadPart :: IxPartProxy p -> String -> Maybe (RecordBuilder.Builder {|r1} {|r2})
+class KeyReadPart (p :: KeyPart) (r1 :: # Type) (r2 :: # Type) | p -> r1 r2 where
+  keyReadPart :: KeyPartProxy p -> String -> Maybe (RecordBuilder.Builder {|r1} {|r2})
 
-instance ixReadPartConst ::
+instance keyReadPartConst ::
   ( IsWordAllUpper1 s
   , IsSymbol s
-  ) => IxReadPart (IxConst s) r r where
+  ) => KeyReadPart (KeyConst s) r r where
 
-  ixReadPart _ s =
+  keyReadPart _ s =
     guard (s == reflectSymbol (SProxy :: _ s)) $> identity
 
-instance ixReadPartDyn ::
+instance keyReadPartDyn ::
   ( IsSymbol n
   , Row.Cons n t r1 r2
   , Row.Lacks n r1
   , KeySegmentCodec t
-  ) => IxReadPart (IxDyn n t) r1 r2 where
+  ) => KeyReadPart (KeyDyn n t) r1 r2 where
 
-  ixReadPart _ s =
+  keyReadPart _ s =
     case String.splitAt 1 s of
       { before: "_", after } ->
         decodeKeySegment after <#> RecordBuilder.insert (SProxy :: _ n)
@@ -113,74 +113,74 @@ instance ixReadPartDyn ::
         Nothing
 
 
-class MkIxValue (l :: IxList1) (r :: # Type) | l -> r where
-  mkIxValue :: {|r} -> IxValue l
+class MkKeyValue (l :: KeyList1) (r :: # Type) | l -> r where
+  mkKeyValue :: {|r} -> KeyValue l
 
-instance mkIxValueLast1 ::
-  IxWritePart p r =>
-  MkIxValue (IxLast1 p) r where
+instance mkKeyValueLast1 ::
+  KeyWritePart p r =>
+  MkKeyValue (KeyLast1 p) r where
 
-  mkIxValue r = IxValue $ ixWritePart (IxPartProxy :: _ p) r
+  mkKeyValue r = KeyValue $ keyWritePart (KeyPartProxy :: _ p) r
 
-instance mkIxValueCons1 ::
-  ( IxWritePart p r
-  , MkIxValue t r
+instance mkKeyValueCons1 ::
+  ( KeyWritePart p r
+  , MkKeyValue t r
   ) =>
-  MkIxValue (IxCons1 p t) r where
+  MkKeyValue (KeyCons1 p t) r where
 
-  mkIxValue r =
-    IxValue
-    $ ixWritePart (IxPartProxy :: _ p) r
+  mkKeyValue r =
+    KeyValue
+    $ keyWritePart (KeyPartProxy :: _ p) r
     <> "#"
-    <> printIxValue (mkIxValue r :: _ t)
+    <> printKeyValue (mkKeyValue r :: _ t)
 
-class ReadIxValue (l :: IxList1) (r1 :: # Type) (r2 :: # Type) | l -> r1 r2 where
-  readIxValue' :: IxList1Proxy l -> Array String -> Int -> Maybe (RecordBuilder.Builder {|r1} {|r2})
+class ReadKeyValue (l :: KeyList1) (r1 :: # Type) (r2 :: # Type) | l -> r1 r2 where
+  readKeyValue' :: KeyList1Proxy l -> Array String -> Int -> Maybe (RecordBuilder.Builder {|r1} {|r2})
 
-instance readIxValueLast1 ::
-  IxReadPart p r1 r2 =>
-  ReadIxValue (IxLast1 p) r1 r2 where
+instance readKeyValueLast1 ::
+  KeyReadPart p r1 r2 =>
+  ReadKeyValue (KeyLast1 p) r1 r2 where
 
-  readIxValue' _ as ndx = do
+  readKeyValue' _ as ndx = do
     guard (Array.length as == ndx + 1)
-    (as !! ndx) >>= ixReadPart (IxPartProxy :: _ p)
+    (as !! ndx) >>= keyReadPart (KeyPartProxy :: _ p)
 
-instance readIxValueCons1 ::
-  ( IxReadPart p r1 r2
-  , ReadIxValue t r2 r3
+instance readKeyValueCons1 ::
+  ( KeyReadPart p r1 r2
+  , ReadKeyValue t r2 r3
   ) =>
-  ReadIxValue (IxCons1 p t) r1 r3 where
+  ReadKeyValue (KeyCons1 p t) r1 r3 where
 
-  readIxValue' _ as ndx =
+  readKeyValue' _ as ndx =
     (>>>)
-    <$> ((as !! ndx) >>= ixReadPart (IxPartProxy :: _ p))
-    <*> readIxValue' (IxList1Proxy :: _ t) as (ndx + 1)
+    <$> ((as !! ndx) >>= keyReadPart (KeyPartProxy :: _ p))
+    <*> readKeyValue' (KeyList1Proxy :: _ t) as (ndx + 1)
 
-readIxValue ::
+readKeyValue ::
   forall l r.
-  ReadIxValue l () r =>
+  ReadKeyValue l () r =>
   String ->
-  Maybe { ixv :: IxValue l, r :: {|r} }
-readIxValue s = b <#> \b' ->
-  { ixv: IxValue s
+  Maybe { value :: KeyValue l, r :: {|r} }
+readKeyValue s = b <#> \b' ->
+  { value: KeyValue s
   , r: RecordBuilder.build b' {}
   }
   where
-    b = readIxValue' (IxList1Proxy :: _ l) (String.split (String.Pattern "#") s) 0
+    b = readKeyValue' (KeyList1Proxy :: _ l) (String.split (String.Pattern "#") s) 0
 
-readIxValue_ ::
+readKeyValue_ ::
   forall l r.
-  ReadIxValue l () r =>
+  ReadKeyValue l () r =>
   String ->
-  Maybe (IxValue l)
-readIxValue_ s = _.ixv <$> readIxValue s
+  Maybe (KeyValue l)
+readKeyValue_ s = _.value <$> readKeyValue s
 
-readIxValueContent ::
+readKeyValueContent ::
   forall l r.
-  ReadIxValue l () r =>
-  IxList1Proxy l ->
+  ReadKeyValue l () r =>
+  KeyList1Proxy l ->
   String ->
   Maybe {|r}
-readIxValueContent p s = _.r <$> read
+readKeyValueContent p s = _.r <$> read
   where
-    read = readIxValue s :: _ { ixv :: IxValue l, r :: {|r} }
+    read = readKeyValue s :: _ { value :: KeyValue l, r :: {|r} }

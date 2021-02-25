@@ -5,7 +5,7 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 import Prelude
 
 import AWS.DynamoDB.SingleTable.DynText (NormalizedText, normalizeText)
-import AWS.DynamoDB.SingleTable.Schema (class MkIxValue, class ReadIxValue, type (:#), type (:#:), IxConst, IxDyn, IxLast1, IxList1Proxy(..), IxValue, mkIxValue, printIxValue, readIxValue, readIxValue_)
+import AWS.DynamoDB.SingleTable.Schema (class MkKeyValue, class ReadKeyValue, type (:#), type (:#:), KeyConst, KeyDyn, KeyLast1, KeyList1Proxy(..), KeyValue, mkKeyValue, printKeyValue, readKeyValue, readKeyValue_)
 import Data.Maybe (isNothing)
 import Effect.Aff (Aff)
 import Test.Spec (Spec, describe, it)
@@ -14,7 +14,7 @@ import Test.Spec.Assertions (shouldContain, shouldEqual, shouldSatisfy)
 {-
 type Schema =
   ( repo :: RProxy
-       ( pk :: IxProxy (IxConst "REPO" :+: IxVar "repoName")
+       ( pk :: KeyProxy (KeyConst "REPO" :+: KeyVar "repoName")
        , sk :: SkProxy (SkConst _20 "REPO")
        )
   )
@@ -22,59 +22,59 @@ type Schema =
 
 schemaSpec :: Spec Unit
 schemaSpec = describe "schema" do
-  ixWriteSpec
-  ixReadSpec
+  keyWriteSpec
+  keyReadSpec
 
-ixWriteSpec :: Spec Unit
-ixWriteSpec = describe "ix write" do
-  it "should write single const ix" do
-    (mkIxValue {} :: _ (IxLast1 (IxConst "FOO")))
+keyWriteSpec :: Spec Unit
+keyWriteSpec = describe "key write" do
+  it "should write single const key" do
+    (mkKeyValue {} :: _ (KeyLast1 (KeyConst "FOO")))
       `shouldPrintAs` "FOO"
 
-  it "should write double const ix" do
-    (mkIxValue {} :: _ (IxConst "FOO" :#: IxConst "BAR"))
+  it "should write double const key" do
+    (mkKeyValue {} :: _ (KeyConst "FOO" :#: KeyConst "BAR"))
       `shouldPrintAs` "FOO#BAR"
 
-  it "should write const#dyn#const ix" do
-    (mkIxValue { bar: normalizeText "baz" } :: _ (IxConst "FOO" :# IxDyn "bar" NormalizedText :#: IxConst "QUX"))
+  it "should write const#dyn#const key" do
+    (mkKeyValue { bar: normalizeText "baz" } :: _ (KeyConst "FOO" :# KeyDyn "bar" NormalizedText :#: KeyConst "QUX"))
       `shouldPrintAs` "FOO#_baz#QUX"
 
-ixReadSpec :: Spec Unit
-ixReadSpec = describe "ix read" do
+keyReadSpec :: Spec Unit
+keyReadSpec = describe "key read" do
   it "roundtrip" do
-    testRoundtrip (p :: _ (IxLast1 (IxConst "FOO"))) {}
-    testRoundtrip (p :: _ (IxConst "FOO" :#: IxConst "BAR")) {}
-    testRoundtrip (p :: _ (IxConst "FOO" :# IxDyn "bar" NormalizedText :#: IxConst "QUX")) { bar: normalizeText "baz" }
+    testRoundtrip (p :: _ (KeyLast1 (KeyConst "FOO"))) {}
+    testRoundtrip (p :: _ (KeyConst "FOO" :#: KeyConst "BAR")) {}
+    testRoundtrip (p :: _ (KeyConst "FOO" :# KeyDyn "bar" NormalizedText :#: KeyConst "QUX")) { bar: normalizeText "baz" }
 
   it "should fail on const mismatch" do
-    (readIxValue_ "BAR" :: _  (_ (IxLast1 (IxConst "FOO"))))
+    (readKeyValue_ "BAR" :: _  (_ (KeyLast1 (KeyConst "FOO"))))
       `shouldSatisfy` isNothing
 
   it "should fail on wrong length" do
-    (readIxValue_ "FOO#BAR#BAZ" :: _ (_ (IxConst "FOO" :#: IxConst "BAR")))
+    (readKeyValue_ "FOO#BAR#BAZ" :: _ (_ (KeyConst "FOO" :#: KeyConst "BAR")))
       `shouldSatisfy` isNothing
 
-shouldPrintAs :: forall l. IxValue l -> String -> Aff Unit
-shouldPrintAs ixValue s =
-  printIxValue ixValue `shouldEqual` s
+shouldPrintAs :: forall l. KeyValue l -> String -> Aff Unit
+shouldPrintAs keyValue s =
+  printKeyValue keyValue `shouldEqual` s
 
 testRoundtrip ::
   forall l r.
-  MkIxValue l r =>
-  ReadIxValue l () r =>
+  MkKeyValue l r =>
+  ReadKeyValue l () r =>
   Show {|r} =>
   Eq {|r} =>
-  IxList1Proxy l ->
+  KeyList1Proxy l ->
   {|r} ->
   Aff Unit
 testRoundtrip _ r =
-  readIxValue s `shouldContain` { ixv, r }
+  readKeyValue s `shouldContain` { value, r }
   where
-    ixv = mkIxValue r :: _ l
-    s = printIxValue ixv
+    value = mkKeyValue r :: _ l
+    s = printKeyValue value
 
-p :: forall l. IxList1Proxy l
-p = IxList1Proxy
+p :: forall l. KeyList1Proxy l
+p = KeyList1Proxy
 -- The ff should not compile
 
--- foo = mkIxValue {} :: _ (IxLast1 (IxConst "foo"))
+-- foo = mkKeyValue {} :: _ (KeyLast1 (KeyConst "foo"))
