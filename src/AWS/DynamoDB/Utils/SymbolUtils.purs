@@ -1,7 +1,6 @@
 module AWS.DynamoDB.SingleTable.Utils.SymbolUtils
        ( class IsCharUpper
        , class IsWordAllUpper
-       , class IsWordAllUpper1
        ) where
 
 import Prim.Symbol as Symbol
@@ -43,11 +42,3 @@ else instance isWordAllUpperCons ::
   , IsCharUpper h
   , IsWordAllUpper t
   ) => IsWordAllUpper s
-
-class IsWordAllUpper1 (s :: Symbol)
-
-instance isWordAllUpper1 ::
-  ( Symbol.Cons h t s
-  , IsCharUpper h
-  , IsWordAllUpper t
-  ) => IsWordAllUpper1 s

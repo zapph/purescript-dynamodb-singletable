@@ -5,20 +5,11 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 import Prelude
 
 import AWS.DynamoDB.SingleTable.DynText (NormalizedText, normalizeText)
-import AWS.DynamoDB.SingleTable.Schema (class MkKey, class ReadKey, type (:#:), KC, KD, KNil, Key, KeySegmentListProxy, kp, mkKey, printKey, readKey, readKey_)
-import Data.Maybe (isNothing)
+import AWS.DynamoDB.SingleTable.Schema (class MkKey, class ReadKey, type (:#:), KC, KD, KNil, Key, KeySegmentListProxy, Repo, getItem, kp, mkKey, mkRepo, printKey, readKey, readKey_)
+import Data.Maybe (Maybe, isNothing)
 import Effect.Aff (Aff)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldContain, shouldEqual, shouldSatisfy)
-
-{-
-type Schema =
-  ( repo :: RProxy
-       ( pk :: KeyProxy (KeyConst "REPO" :+: KeyVar "repoName")
-       , sk :: SkProxy (SkConst _20 "REPO")
-       )
-  )
--}
 
 schemaSpec :: Spec Unit
 schemaSpec = describe "schema" do
@@ -27,6 +18,10 @@ schemaSpec = describe "schema" do
 
 keyWriteSpec :: Spec Unit
 keyWriteSpec = describe "key write" do
+  it "should allow empty const key" do
+    (mkKey {} :: _ (KC "" :#: KNil))
+      `shouldPrintAs` ""
+
   it "should write single const key" do
     (mkKey {} :: _ (KC "FOO" :#: KNil))
       `shouldPrintAs` "FOO"
@@ -53,6 +48,62 @@ keyReadSpec = describe "key read" do
   it "should fail on wrong length" do
     (readKey_ "FOO#BAR#BAZ" :: _ (_ (KC "FOO" :#: KC "BAR" :#: KNil)))
       `shouldSatisfy` isNothing
+
+-- Based on https://www.alexdebrie.com/posts/dynamodb-single-table/
+
+type UserPk = Key (KC "USER" :#: KD "username" NormalizedText :#: KNil)
+
+mkUserPk :: { username :: NormalizedText } -> UserPk
+mkUserPk = mkKey
+
+type ProfileSk = Key (KC "" :#: KD "username" NormalizedText :#: KNil)
+
+mkProfileSk :: { username :: NormalizedText } -> ProfileSk
+mkProfileSk = mkKey
+
+type OrderSk = Key (KC "ORDER" :#: KD "orderId" NormalizedText :#: KNil)
+
+mkOrderSk :: { orderId :: NormalizedText } -> OrderSk
+mkOrderSk = mkKey
+
+type User =
+  { pk :: UserPk
+  , sk :: ProfileSk
+  , username :: String
+  , fullName :: String
+  , email :: String
+  }
+
+type Order =
+  { pk :: UserPk
+  , sk :: OrderSk
+  , orderId :: String
+  , status :: String
+  }
+
+type Schema =
+  ( "user" :: User
+  , "order" :: Order
+  )
+
+repo :: Repo Schema
+repo = mkRepo
+
+getUserSample :: Aff (Maybe User)
+getUserSample =
+  getItem repo
+    { pk: mkUserPk { username: normalizeText "alexdebrie" }
+    , sk: mkProfileSk { username: normalizeText "alexdebrie" }
+    }
+
+getOrderSample :: Aff (Maybe Order)
+getOrderSample =
+  getItem repo
+    { pk: mkUserPk { username: normalizeText "alexdebrie" }
+    , sk: mkOrderSk { orderId: normalizeText "1234" }
+    }
+
+-- Utils
 
 shouldPrintAs :: forall l. Key l -> String -> Aff Unit
 shouldPrintAs key s =

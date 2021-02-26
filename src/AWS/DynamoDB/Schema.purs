@@ -23,21 +23,35 @@ module AWS.DynamoDB.SingleTable.Schema
        , readKey
        , readKey_
        , readKeyContent
+       , Repo
+       , mkRepo
+       , class GetItem
+       , class GetItemRl
+       , getItem'
+       , getItem
+       , class IsSubset
+       , class Row1
        ) where
 
 import Prelude
 
 import AWS.DynamoDB.SingleTable.DynText (class KeySegmentCodec, decodeKeySegment, encodeKeySegment)
-import AWS.DynamoDB.SingleTable.Utils.SymbolUtils (class IsWordAllUpper1)
+import AWS.DynamoDB.SingleTable.Utils.SymbolUtils (class IsWordAllUpper)
 import Control.MonadPlus (guard)
 import Data.Array ((!!))
 import Data.Array as Array
 import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Variant (Variant, case_, on)
+import Effect.Aff (Aff)
+import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row as Row
+import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
 import Record as Record
 import Record.Builder as RecordBuilder
+import Type.Data.Boolean (class If)
+import Type.Row (RProxy)
 
 newtype Key (l :: KeySegmentList) = Key String
 
@@ -71,7 +85,7 @@ class WriteKeySegment (p :: KeySegment) (r :: # Type) where
   writeKeySegment :: KeySegmentProxy p -> {|r} -> String
 
 instance writeKeySegmentConst ::
-  ( IsWordAllUpper1 s
+  ( IsWordAllUpper s
   , IsSymbol s
   ) => WriteKeySegment (KC s) r where
 
@@ -90,7 +104,7 @@ class ReadKeySegment (p :: KeySegment) (r1 :: # Type) (r2 :: # Type) | p -> r1 r
   readKeySegment :: KeySegmentProxy p -> String -> Maybe (RecordBuilder.Builder {|r1} {|r2})
 
 instance readKeySegmentConst ::
-  ( IsWordAllUpper1 s
+  ( IsWordAllUpper s
   , IsSymbol s
   ) => ReadKeySegment (KC s) r r where
 
@@ -183,3 +197,65 @@ readKeyContent ::
 readKeyContent p s = _.r <$> read
   where
     read = readKey s :: _ { value :: Key l, r :: {|r} }
+
+--
+
+newtype Repo (s :: # Type) = Repo {}
+
+mkRepo :: forall s. Repo s
+mkRepo = Repo {}
+
+class GetItem (r :: # Type) (pkl :: KeySegmentList) (skl :: KeySegmentList) (opts :: # Type) | r pkl skl -> opts
+
+instance getItemI ::
+  ( RowToList r rl
+  , GetItemRl rl pkl skl opts
+  ) => GetItem r pkl skl opts
+
+class GetItemRl (rl :: RowList) (pkl :: KeySegmentList) (skl :: KeySegmentList) (opts :: # Type) | rl pkl skl -> opts
+
+instance getItemRlNil :: GetItemRl Nil pkl skl ()
+
+instance getItemRlConsMatch ::
+  ( RowToList r rl
+  , GetItemRl tl pkl skl tlOpts
+  , Row.Cons k {|r} tlOpts ifMatch
+  , IsSubset rl (Cons "pk" (Key pkl) (Cons "sk" (Key skl) Nil)) isSubset
+  , If isSubset (RProxy ifMatch) (RProxy tlOpts) (RProxy opts)
+  ) =>
+  GetItemRl (Cons k {|r} tl) pkl skl opts
+
+class IsSubset (p :: RowList) (sub :: RowList) (r :: Boolean) | p sub -> r
+
+instance isSubsetT :: IsSubset p Nil True
+else instance isSubsetF :: IsSubset Nil (Cons k v tl) False
+else instance isSubsetMatch ::
+  IsSubset pTl subTl r =>
+  IsSubset (Cons k v pTl) (Cons k v subTl) r
+else instance isSubsetSkip ::
+  IsSubset pTl (Cons k2 v2 subTl) r =>
+  IsSubset (Cons k1 v1 pTl) (Cons k2 v2 subTl) r
+
+getItem' ::
+  forall s pkl skl opts.
+  GetItem s pkl skl opts =>
+  Repo s ->
+  { pk :: Key pkl, sk :: Key skl } ->
+  Aff (Maybe (Variant opts))
+getItem' _ _ = pure Nothing
+
+class Row1 (rl :: RowList) (k :: Symbol) t | rl -> k t
+instance row1 :: Row1 (Cons k t Nil) k t
+
+getItem ::
+  forall s pkl skl k v opts optsRl.
+  GetItem s pkl skl opts =>
+  Row.Cons k v () opts =>
+  RowToList opts optsRl =>
+  Row1 optsRl k v =>
+  IsSymbol k =>
+  Repo s ->
+  { pk :: Key pkl, sk :: Key skl } ->
+  Aff (Maybe v)
+getItem repo keyPair =
+  map (case_ # on (SProxy :: _ k) identity) <$> getItem' repo keyPair
