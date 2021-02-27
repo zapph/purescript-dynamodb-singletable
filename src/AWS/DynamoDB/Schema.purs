@@ -35,6 +35,7 @@ module AWS.DynamoDB.SingleTable.Schema
 
 import Prelude
 
+import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, readAV, writeAV)
 import AWS.DynamoDB.SingleTable.DynText (class KeySegmentCodec, decodeKeySegment, encodeKeySegment)
 import AWS.DynamoDB.SingleTable.Utils.SymbolUtils (class IsWordAllUpper)
 import Control.MonadPlus (guard)
@@ -60,6 +61,12 @@ derive instance keyOrd :: Ord (Key l)
 
 instance keyShow :: Show (Key l) where
   show (Key s) = "(Key " <> s <> ")"
+
+instance keyAVCodec ::
+  ReadKey l () r =>
+  AVCodec (Key l) where
+  readAV = readAV >=> readKey_
+  writeAV = printKey >>> writeAV
 
 printKey :: forall l. Key l -> String
 printKey (Key s) = s
