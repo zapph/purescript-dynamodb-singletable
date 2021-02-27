@@ -65,9 +65,9 @@ mkSingleTableDb table =
 getItem ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
   PrimaryKey ->
-  RIO env (Maybe (STDbItem a))
+  RIO env (Maybe a)
 getItem { pk, sk } = do
   table <- getTable
   res <- Cl.getItem
@@ -82,9 +82,9 @@ getItem { pk, sk } = do
 deleteItem ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
   PrimaryKey ->
-  RIO env (Maybe (STDbItem a))
+  RIO env (Maybe a)
 deleteItem { pk, sk } = do
   table <- getTable
   res <- Cl.deleteItem
