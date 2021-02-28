@@ -4,10 +4,12 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.DynText (NormalizedText, normalizeText)
+import AWS.DynamoDB.SingleTable.DynKeySegment (DynKeySegment, normalizedDynKeySegment)
 import AWS.DynamoDB.SingleTable.Schema (class MkKey, class ReadKey, type (:#:), KC, KD, KNil, Key, KeySegmentListProxy, Repo, getItem, kp, mkKey, mkRepo, printKey, readKey, readKey_)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
 import Data.Maybe (Maybe, isNothing)
 import Effect.Aff (Aff)
+import RIO (RIO)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldContain, shouldEqual, shouldSatisfy)
 
@@ -31,7 +33,7 @@ keyWriteSpec = describe "key write" do
       `shouldPrintAs` "FOO#BAR"
 
   it "should write const#dyn#const key" do
-    (mkKey { bar: normalizeText "baz" } :: _ (KC "FOO" :#: KD "bar" NormalizedText :#: KC "QUX" :#: KNil))
+    (mkKey { bar: normalizedDynKeySegment "baz" } :: _ (KC "FOO" :#: KD "bar" DynKeySegment :#: KC "QUX" :#: KNil))
       `shouldPrintAs` "FOO#_baz#QUX"
 
 keyReadSpec :: Spec Unit
@@ -39,7 +41,7 @@ keyReadSpec = describe "key read" do
   it "roundtrip" do
     testRoundtrip (kp :: _ (KC "FOO" :#: KNil)) {}
     testRoundtrip (kp :: _ (KC "FOO" :#: KC "BAR" :#: KNil)) {}
-    testRoundtrip (kp :: _ (KC "FOO" :#: KD "bar" NormalizedText :#: KC "QUX"  :#: KNil)) { bar: normalizeText "baz" }
+    testRoundtrip (kp :: _ (KC "FOO" :#: KD "bar" DynKeySegment :#: KC "QUX"  :#: KNil)) { bar: normalizedDynKeySegment "baz" }
 
   it "should fail on const mismatch" do
     (readKey_ "BAR" :: _  (_ (KC "FOO" :#: KNil)))
@@ -51,19 +53,19 @@ keyReadSpec = describe "key read" do
 
 -- Based on https://www.alexdebrie.com/posts/dynamodb-single-table/
 
-type UserPk = Key (KC "USER" :#: KD "username" NormalizedText :#: KNil)
+type UserPk = Key (KC "USER" :#: KD "username" DynKeySegment :#: KNil)
 
-mkUserPk :: { username :: NormalizedText } -> UserPk
+mkUserPk :: { username :: DynKeySegment } -> UserPk
 mkUserPk = mkKey
 
-type ProfileSk = Key (KC "" :#: KD "username" NormalizedText :#: KNil)
+type ProfileSk = Key (KC "" :#: KD "username" DynKeySegment :#: KNil)
 
-mkProfileSk :: { username :: NormalizedText } -> ProfileSk
+mkProfileSk :: { username :: DynKeySegment } -> ProfileSk
 mkProfileSk = mkKey
 
-type OrderSk = Key (KC "ORDER" :#: KD "orderId" NormalizedText :#: KNil)
+type OrderSk = Key (KC "ORDER" :#: KD "orderId" DynKeySegment :#: KNil)
 
-mkOrderSk :: { orderId :: NormalizedText } -> OrderSk
+mkOrderSk :: { orderId :: DynKeySegment } -> OrderSk
 mkOrderSk = mkKey
 
 type User =
@@ -89,18 +91,18 @@ type Schema =
 repo :: Repo Schema
 repo = mkRepo
 
-getUserSample :: Aff (Maybe User)
+getUserSample :: forall env. HasSingleTableDb env => RIO env (Maybe User)
 getUserSample =
   getItem repo
-    { pk: mkUserPk { username: normalizeText "alexdebrie" }
-    , sk: mkProfileSk { username: normalizeText "alexdebrie" }
+    { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+    , sk: mkProfileSk { username: normalizedDynKeySegment "alexdebrie" }
     }
 
-getOrderSample :: Aff (Maybe Order)
+getOrderSample :: forall env. HasSingleTableDb env => RIO env (Maybe Order)
 getOrderSample =
   getItem repo
-    { pk: mkUserPk { username: normalizeText "alexdebrie" }
-    , sk: mkOrderSk { orderId: normalizeText "1234" }
+    { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+    , sk: mkOrderSk { orderId: normalizedDynKeySegment "1234" }
     }
 
 -- Utils

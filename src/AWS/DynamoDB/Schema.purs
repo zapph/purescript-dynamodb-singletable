@@ -35,8 +35,10 @@ module AWS.DynamoDB.SingleTable.Schema
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, readAV, writeAV)
-import AWS.DynamoDB.SingleTable.DynText (class KeySegmentCodec, decodeKeySegment, encodeKeySegment)
+import AWS.DynamoDB.SingleTable as S
+import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, class ItemCodec, readAV, writeAV)
+import AWS.DynamoDB.SingleTable.DynKeySegment (class DynKeySegmentCodec, decodeStrippedDynKeySegment, encodeDynKeySegment_)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
 import AWS.DynamoDB.SingleTable.Utils.SymbolUtils (class IsWordAllUpper)
 import Control.MonadPlus (guard)
 import Data.Array ((!!))
@@ -45,10 +47,10 @@ import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Variant (Variant, case_, on)
-import Effect.Aff (Aff)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row as Row
 import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
+import RIO (RIO)
 import Record as Record
 import Record.Builder as RecordBuilder
 import Type.Data.Boolean (class If)
@@ -101,11 +103,11 @@ instance writeKeySegmentConst ::
 instance writeKeySegmentDyn ::
   ( IsSymbol n
   , Row.Cons n t _r r
-  , KeySegmentCodec t
+  , DynKeySegmentCodec t
   ) => WriteKeySegment (KD n t) r where
 
   writeKeySegment _ r =
-    "_" <> encodeKeySegment (Record.get (SProxy :: _ n) r)
+    "_" <> encodeDynKeySegment_ (Record.get (SProxy :: _ n) r)
 
 class ReadKeySegment (p :: KeySegment) (r1 :: # Type) (r2 :: # Type) | p -> r1 r2 where
   readKeySegment :: KeySegmentProxy p -> String -> Maybe (RecordBuilder.Builder {|r1} {|r2})
@@ -122,13 +124,14 @@ instance readKeySegmentDyn ::
   ( IsSymbol n
   , Row.Cons n t r1 r2
   , Row.Lacks n r1
-  , KeySegmentCodec t
+  , DynKeySegmentCodec t
   ) => ReadKeySegment (KD n t) r1 r2 where
 
   readKeySegment _ s =
     case String.splitAt 1 s of
       { before: "_", after } ->
-        decodeKeySegment after <#> RecordBuilder.insert (SProxy :: _ n)
+        decodeStrippedDynKeySegment after
+        <#> RecordBuilder.insert (SProxy :: _ n)
       _ ->
         Nothing
 
@@ -244,18 +247,25 @@ else instance isSubsetSkip ::
   IsSubset (Cons k1 v1 pTl) (Cons k2 v2 subTl) r
 
 getItem' ::
-  forall s pkl skl opts.
+  forall env s pkl skl opts.
+  HasSingleTableDb env =>
+  ItemCodec (Variant opts) =>
   GetItem s pkl skl opts =>
   Repo s ->
   { pk :: Key pkl, sk :: Key skl } ->
-  Aff (Maybe (Variant opts))
-getItem' _ _ = pure Nothing
+  RIO env (Maybe (Variant opts))
+getItem' _ p = S.getItem
+  { pk: printKey p.pk
+  , sk: printKey p.sk
+  }
 
 class Row1 (rl :: RowList) (k :: Symbol) t | rl -> k t
 instance row1 :: Row1 (Cons k t Nil) k t
 
 getItem ::
-  forall s pkl skl k v opts optsRl.
+  forall env s pkl skl k v opts optsRl.
+  HasSingleTableDb env =>
+  ItemCodec (Variant opts) =>
   GetItem s pkl skl opts =>
   Row.Cons k v () opts =>
   RowToList opts optsRl =>
@@ -263,6 +273,6 @@ getItem ::
   IsSymbol k =>
   Repo s ->
   { pk :: Key pkl, sk :: Key skl } ->
-  Aff (Maybe v)
+  RIO env (Maybe v)
 getItem repo keyPair =
   map (case_ # on (SProxy :: _ k) identity) <$> getItem' repo keyPair

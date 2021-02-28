@@ -15,6 +15,7 @@ import Data.Set.NonEmpty (NonEmptySet)
 import Data.Set.NonEmpty as NonEmptySet
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Traversable (for, traverse)
+import Data.Variant (Variant, case_, on)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Foreign.Object.ST as STObject
@@ -291,6 +292,14 @@ instance itemCodecR
     where
       r = RB.build (writeItemRL (RLProxy :: _ rl) a) {}
 
+instance itemCodecVariant ::
+  ( RowToList r rl
+  , ItemCodecVariantRL rl r
+  ) =>
+  ItemCodec (Variant r) where
+
+  readItem = readItemVariantRL (RLProxy :: _ rl)
+  writeItem' = writeItemVariantRL (RLProxy :: _ rl)
 
 class ItemCodecRL (rl :: RowList) (r1 :: # Type) (r2 :: # Type) (r1' :: # Type) (r2' :: # Type) (r :: # Type) | rl -> r1 r2 r1' r2' r where
   readItemRL :: RLProxy rl -> Item -> Maybe (RB.Builder {|r1} {|r2})
@@ -345,3 +354,23 @@ else instance itemValueCodecDirect :: AVCodec a => ItemValueCodec a where
   readItemValue Nothing = Nothing
 
   writeItemValue = Just <<< writeAV
+
+class ItemCodecVariantRL (rl :: RowList) (r :: # Type) | rl -> r where
+  readItemVariantRL :: RLProxy rl -> Item -> Maybe (Variant r)
+  writeItemVariantRL :: RLProxy rl -> Variant r -> Item'
+
+instance itemCodecVariantRLNil :: ItemCodecVariantRL Nil () where
+  readItemVariantRL _ _ = Nothing
+  writeItemVariantRL _ = case_
+
+instance itemCodecVariantRLCons ::
+  ( IsSymbol k
+  , Row.Cons k a r' r
+  , ItemCodecVariantRL tl r'
+  , ItemCodec a
+  ) =>
+  ItemCodecVariantRL (Cons k v tl) r where
+
+  readItemVariantRL _ _ = Nothing
+  writeItemVariantRL _ =
+    on (SProxy :: _ k) writeItem' (writeItemVariantRL (RLProxy :: _ tl))
