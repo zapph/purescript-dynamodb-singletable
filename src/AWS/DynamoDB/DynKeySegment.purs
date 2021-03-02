@@ -6,8 +6,6 @@ module AWS.DynamoDB.SingleTable.DynKeySegment
        , class DynKeySegmentCodec
        , encodeDynKeySegment
        , decodeDynKeySegment
-       , encodeDynKeySegment_
-       , decodeStrippedDynKeySegment
        ) where
 
 import Prelude
@@ -40,18 +38,17 @@ printDynKeySegment :: DynKeySegment -> String
 printDynKeySegment (DynKeySegment s) = s
 
 class DynKeySegmentCodec a where
-  encodeDynKeySegment :: a -> DynKeySegment
-  decodeDynKeySegment :: DynKeySegment -> Maybe a
+  encodeDynKeySegment :: a -> String
+  decodeDynKeySegment :: String -> Maybe { a :: a, rest :: String }
 
 instance dynKeySegmentId :: DynKeySegmentCodec DynKeySegment where
-  encodeDynKeySegment = identity
-  decodeDynKeySegment = Just
-
-encodeDynKeySegment_ :: forall a. DynKeySegmentCodec a => a -> String
-encodeDynKeySegment_ = printDynKeySegment <<< encodeDynKeySegment
-
-decodeStrippedDynKeySegment :: forall a. DynKeySegmentCodec a => String -> Maybe a
-decodeStrippedDynKeySegment = decodeDynKeySegment <<< strippedDynKeySegment
+  encodeDynKeySegment (DynKeySegment s) = s
+  decodeDynKeySegment s = case String.indexOf (String.Pattern "#") s of
+    Just ndx -> case String.splitAt ndx s of
+      { before, after } ->
+        Just { a: DynKeySegment before, rest: after }
+    _ ->
+      Just { a: DynKeySegment s, rest: "" }
 
 nonAlphanumG :: Regex
 nonAlphanumG = unsafeRegex "[^a-zA-Z0-9]+" RegexFlags.global

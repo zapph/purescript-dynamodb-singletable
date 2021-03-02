@@ -5,9 +5,10 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 import Prelude
 
 import AWS.DynamoDB.SingleTable.DynKeySegment (DynKeySegment, normalizedDynKeySegment)
-import AWS.DynamoDB.SingleTable.Schema (class MkKey, class ReadKey, type (:#:), KC, KD, KNil, Key, KeySegmentListProxy, Repo, getItem, kp, mkKey, mkRepo, printKey, readKey, readKey_)
+import AWS.DynamoDB.SingleTable.Schema (class MkKey, class ReadKey, class ToKeySegmentList, Key, Repo, getItem, mkKey, mkRepo, printKey, readKey, readKey_)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
 import Data.Maybe (Maybe, isNothing)
+import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Effect.Aff (Aff)
 import RIO (RIO)
 import Test.Spec (Spec, describe, it)
@@ -21,49 +22,49 @@ schemaSpec = describe "schema" do
 keyWriteSpec :: Spec Unit
 keyWriteSpec = describe "key write" do
   it "should allow empty const key" do
-    (mkKey {} :: _ (KC "" :#: KNil))
+    (mkKey {} :: _ "")
       `shouldPrintAs` ""
 
   it "should write single const key" do
-    (mkKey {} :: _ (KC "FOO" :#: KNil))
+    (mkKey {} :: _ "FOO")
       `shouldPrintAs` "FOO"
 
   it "should write double const key" do
-    (mkKey {} :: _ (KC "FOO" :#: KC "BAR" :#: KNil))
+    (mkKey {} :: _ "FOO#BAR")
       `shouldPrintAs` "FOO#BAR"
 
   it "should write const#dyn#const key" do
-    (mkKey { bar: normalizedDynKeySegment "baz" } :: _ (KC "FOO" :#: KD "bar" DynKeySegment :#: KC "QUX" :#: KNil))
+    (mkKey { bar: normalizedDynKeySegment "baz" } :: Key "FOO#_<bar>#QUX")
       `shouldPrintAs` "FOO#_baz#QUX"
 
 keyReadSpec :: Spec Unit
 keyReadSpec = describe "key read" do
-  it "roundtrip" do
-    testRoundtrip (kp :: _ (KC "FOO" :#: KNil)) {}
-    testRoundtrip (kp :: _ (KC "FOO" :#: KC "BAR" :#: KNil)) {}
-    testRoundtrip (kp :: _ (KC "FOO" :#: KD "bar" DynKeySegment :#: KC "QUX"  :#: KNil)) { bar: normalizedDynKeySegment "baz" }
+  testRoundtrip (SProxy :: _ "FOO") {}
+  testRoundtrip (SProxy :: _ "FOO#BAR") {}
+  testRoundtrip (SProxy :: _ "FOO#_<bar>") { bar: normalizedDynKeySegment "baz" }
+  testRoundtrip (SProxy :: _ "FOO#_<bar>#QUX") { bar: normalizedDynKeySegment "baz" }
 
   it "should fail on const mismatch" do
-    (readKey_ "BAR" :: _  (_ (KC "FOO" :#: KNil)))
+    (readKey_ "BAR" :: _  (_ "FOO"))
       `shouldSatisfy` isNothing
 
   it "should fail on wrong length" do
-    (readKey_ "FOO#BAR#BAZ" :: _ (_ (KC "FOO" :#: KC "BAR" :#: KNil)))
+    (readKey_ "FOO#BAR#BAZ" :: _ (_ "FOO#BAR"))
       `shouldSatisfy` isNothing
 
 -- Based on https://www.alexdebrie.com/posts/dynamodb-single-table/
 
-type UserPk = Key (KC "USER" :#: KD "username" DynKeySegment :#: KNil)
+type UserPk = Key "USER#_<username>"
 
 mkUserPk :: { username :: DynKeySegment } -> UserPk
 mkUserPk = mkKey
 
-type ProfileSk = Key (KC "" :#: KD "username" DynKeySegment :#: KNil)
+type ProfileSk = Key "USER#_<username>"
 
 mkProfileSk :: { username :: DynKeySegment } -> ProfileSk
 mkProfileSk = mkKey
 
-type OrderSk = Key (KC "ORDER" :#: KD "orderId" DynKeySegment :#: KNil)
+type OrderSk = Key "ORDER#_<orderId>"
 
 mkOrderSk :: { orderId :: DynKeySegment } -> OrderSk
 mkOrderSk = mkKey
@@ -112,19 +113,22 @@ shouldPrintAs key s =
   printKey key `shouldEqual` s
 
 testRoundtrip ::
-  forall l r.
+  forall s l r.
+  ToKeySegmentList s l =>
   MkKey l r =>
   ReadKey l () r =>
   Show {|r} =>
   Eq {|r} =>
-  KeySegmentListProxy l ->
+  IsSymbol s =>
+  SProxy s ->
   {|r} ->
-  Aff Unit
-testRoundtrip _ r =
+  Spec Unit
+testRoundtrip sp r = it ("should roundtrip " <> keyName) do
   readKey s `shouldContain` { value, r }
   where
-    value = mkKey r :: _ l
+    value = mkKey r :: _ s
     s = printKey value
+    keyName = reflectSymbol (SProxy :: _ s)
 
 -- The ff should not compile
 
