@@ -231,9 +231,9 @@ updateItem retVals updateF keyConditionF {pk, sk} = do
 queryPrimaryBySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (STDbItem a))
+  RIO env (Array a)
 queryPrimaryBySkPrefix =
   queryBySkPrefix
   { pkPath: "pk"
@@ -244,37 +244,37 @@ queryPrimaryBySkPrefix =
 queryGsi1BySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (STDbItem a))
+  RIO env (Array a)
 queryGsi1BySkPrefix =
   queryGsiNBySkPrefix 1
 
 queryGsi2BySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (STDbItem a))
+  RIO env (Array a)
 queryGsi2BySkPrefix =
   queryGsiNBySkPrefix 2
 
 queryGsi3BySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (STDbItem a))
+  RIO env (Array a)
 queryGsi3BySkPrefix =
   queryGsiNBySkPrefix 3
 
 queryGsiNBySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
   Int ->
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (STDbItem a))
+  RIO env (Array a)
 queryGsiNBySkPrefix n =
   queryBySkPrefix
   { pkPath: "gsi" <> n' <> "pk"
@@ -287,10 +287,10 @@ queryGsiNBySkPrefix n =
 queryBySkPrefix ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
   { pkPath :: String, skPath :: String, indexName :: Maybe String } ->
   { pk :: String, skPrefix :: String } ->
-  RIO env (Array (STDbItem a))
+  RIO env (Array a)
 queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } = do
   table <- getTable
   queryRawItems table >>= traverse readItemOrErr
