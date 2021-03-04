@@ -31,14 +31,9 @@ module AWS.DynamoDB.SingleTable.Schema
        , readKeyContent
        , Repo
        , mkRepo
-       , class FilterRows
-       , class FilterRows'
-       , class Filter
        , GetItem
        , getItem'
        , getItem
-       , class IsSubset
-       , class IsSubsetRl
        , QueryPrimaryBySkPrefix
        , queryPrimaryBySkPrefix'
        , queryPrimaryBySkPrefix
@@ -56,7 +51,7 @@ import AWS.DynamoDB.SingleTable as S
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, class ItemCodec, readAV, writeAV)
 import AWS.DynamoDB.SingleTable.DynKeySegment (class DynKeySegmentCodec, DynKeySegment, decodeDynKeySegment, encodeDynKeySegment)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
-import AWS.DynamoDB.SingleTable.Utils (class On1, on1)
+import AWS.DynamoDB.SingleTable.Utils (class Filter, class FilterRows, class IsSubset, class On1, on1)
 import Control.MonadPlus (guard)
 import Data.Maybe (Maybe(..))
 import Data.String as String
@@ -65,14 +60,12 @@ import Data.Variant (Variant)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Ordering (EQ, kind Ordering)
 import Prim.Row as Row
-import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
 import Prim.Symbol as Symbol
 import Prim.TypeError (class Fail, Text)
 import RIO (RIO)
 import Record as Record
 import Record.Builder as RecordBuilder
-import Type.Data.Boolean (class And, class If)
-import Type.Row (RProxy)
+import Type.Data.Boolean (class And)
 
 newtype Key (s :: Symbol) = Key String
 
@@ -164,11 +157,6 @@ else instance toKeySegmentListDynStepCons ::
   ( Symbol.Append acc h acc'
   , ToKeySegmentListDyn t acc' l
   ) => ToKeySegmentListDynStep h t acc l
-
-type MyPk = Key "AB"
-
-bla :: MyPk
-bla = mkKey {}
 
 class AddConst (accd :: Symbol) (l :: KeySegmentList) (l' :: KeySegmentList) | accd l -> l'
 
@@ -300,53 +288,13 @@ newtype Repo (s :: # Type) = Repo {}
 mkRepo :: forall s. Repo s
 mkRepo = Repo {}
 
-class FilterRows filter (r :: # Type) (o :: # Type) | filter r -> o
-
-instance filterRows ::
-  ( RowToList r rl
-  , FilterRows' filter rl o
-  ) => FilterRows filter r o
-
-class FilterRows' filter (rl :: RowList) (o :: # Type) | filter rl -> o
-
-instance filterRowsNil ::
-  FilterRows' filter Nil ()
-
-instance filterRowsCons ::
-  ( FilterRows' filter tl tlOpts
-  , Filter filter a isIncluded
-  , Row.Cons k a tlOpts ifMatch
-  , If isIncluded (RProxy ifMatch) (RProxy tlOpts) (RProxy opts)
-  ) => FilterRows' filter (Cons k a tl) opts
-
-class Filter filter a (isIncluded :: Boolean) | filter a -> isIncluded
-
 data GetItem pk sk
 
 instance getItemFilterRecord ::
-  ( IsSubset r (pk :: pk, sk :: sk) isSubset
-  ) => Filter (GetItem pk sk) {|r} isSubset
+  IsSubset r (pk :: pk, sk :: sk) isSubset =>
+  Filter (GetItem pk sk) {|r} isSubset
 else instance getItemFilterNonRecord ::
-  Filter (GetItem pk sk) a False
-
-class IsSubset (p :: # Type) (sub :: # Type) (r :: Boolean) | p sub -> r
-
-instance isSubset ::
-  ( RowToList p pRl
-  , RowToList sub subRl
-  , IsSubsetRl pRl subRl isSubset
-  ) => IsSubset p sub isSubset
-
-class IsSubsetRl (p :: RowList) (sub :: RowList) (r :: Boolean) | p sub -> r
-
-instance isSubsetRlT :: IsSubsetRl p Nil True
-else instance isSubsetRlF :: IsSubsetRl Nil (Cons k v tl) False
-else instance isSubsetRlMatch ::
-  IsSubsetRl pTl subTl r =>
-  IsSubsetRl (Cons k v pTl) (Cons k v subTl) r
-else instance isSubsetRlSkip ::
-  IsSubsetRl pTl (Cons k2 v2 subTl) r =>
-  IsSubsetRl (Cons k1 v1 pTl) (Cons k2 v2 subTl) r
+  Filter (GetItem pk sk) {|r} False
 
 getItem' ::
   forall env s pks sks opts.

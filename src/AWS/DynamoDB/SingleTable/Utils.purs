@@ -3,14 +3,22 @@ module AWS.DynamoDB.SingleTable.Utils
        , objEqual
        , class On1
        , on1
+       , class FilterRows
+       , class FilterRowsRl
+       , class Filter
+       , class IsSubset
+       , class IsSubsetRl
        ) where
 
 import Prelude
 
 import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Variant (Variant, case_, on)
+import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row as Row
-import Prim.RowList (class RowToList, Cons, Nil)
+import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
+import Type.Data.Boolean (class If)
+import Type.Row (RProxy)
 
 foreign import jsonStringify :: forall a. a -> String
 foreign import objEqual :: forall a. a -> a -> Boolean
@@ -24,3 +32,43 @@ instance on1I ::
   , IsSymbol k
   ) => On1 r v where
   on1 = case_ # on (SProxy :: _ k) identity
+
+class FilterRows filter (r :: # Type) (o :: # Type) | filter r -> o
+
+instance filterRows ::
+  ( RowToList r rl
+  , FilterRowsRl filter rl o
+  ) => FilterRows filter r o
+
+class FilterRowsRl filter (rl :: RowList) (o :: # Type) | filter rl -> o
+
+instance filterRowsNil ::
+  FilterRowsRl filter Nil ()
+
+instance filterRowsCons ::
+  ( FilterRowsRl filter tl tlOpts
+  , Filter filter a isIncluded
+  , Row.Cons k a tlOpts ifMatch
+  , If isIncluded (RProxy ifMatch) (RProxy tlOpts) (RProxy opts)
+  ) => FilterRowsRl filter (Cons k a tl) opts
+
+class Filter filter a (isIncluded :: Boolean) | filter a -> isIncluded
+
+class IsSubset (p :: # Type) (sub :: # Type) (r :: Boolean) | p sub -> r
+
+instance isSubset ::
+  ( RowToList p pRl
+  , RowToList sub subRl
+  , IsSubsetRl pRl subRl isSubset
+  ) => IsSubset p sub isSubset
+
+class IsSubsetRl (p :: RowList) (sub :: RowList) (r :: Boolean) | p sub -> r
+
+instance isSubsetRlT :: IsSubsetRl p Nil True
+else instance isSubsetRlF :: IsSubsetRl Nil (Cons k v tl) False
+else instance isSubsetRlMatch ::
+  IsSubsetRl pTl subTl r =>
+  IsSubsetRl (Cons k v pTl) (Cons k v subTl) r
+else instance isSubsetRlSkip ::
+  IsSubsetRl pTl (Cons k2 v2 subTl) r =>
+  IsSubsetRl (Cons k1 v1 pTl) (Cons k2 v2 subTl) r
