@@ -46,8 +46,8 @@ import Prelude
 import AWS.DynamoDB.SingleTable as S
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, class ItemCodec, readAV, writeAV)
 import AWS.DynamoDB.SingleTable.DynKeySegment (class DynKeySegmentCodec, DynKeySegment, decodeDynKeySegment, encodeDynKeySegment)
+import AWS.DynamoDB.SingleTable.Internal (class Filter, class FilterRows, class IsSubset, class On1, on1)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
-import AWS.DynamoDB.SingleTable.Utils (class Filter, class FilterRows, class IsSubset, class On1, on1)
 import AWS.DynamoDB.SingleTable.Utils.SymbolUtils (class ChompCommonPrefix, class IsSymbolEq)
 import Control.MonadPlus (guard)
 import Data.Maybe (Maybe(..))
@@ -55,7 +55,6 @@ import Data.String as String
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Variant (Variant)
 import Prim.Boolean (False, True, kind Boolean)
-import Prim.Ordering (EQ, kind Ordering)
 import Prim.Row as Row
 import Prim.Symbol as Symbol
 import Prim.TypeError (class Fail, Text)

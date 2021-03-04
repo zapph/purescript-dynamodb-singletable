@@ -1,4 +1,4 @@
-module AWS.DynamoDB.SingleTable.Utils
+module AWS.DynamoDB.SingleTable.Internal
        ( jsonStringify
        , objEqual
        , class On1

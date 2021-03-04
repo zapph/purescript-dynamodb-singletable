@@ -17,7 +17,7 @@ module AWS.DynamoDB.SingleTable.Types
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.Utils (jsonStringify, objEqual)
+import AWS.DynamoDB.SingleTable.Internal (jsonStringify, objEqual)
 import Data.Lens (Lens')
 import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
 import Foreign.Object (Object)
