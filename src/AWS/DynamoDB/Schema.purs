@@ -39,7 +39,6 @@ module AWS.DynamoDB.SingleTable.Schema
        , getItem
        , class IsSubset
        , class IsSubsetRl
-       , class Row1
        , QueryPrimaryBySkPrefix
        , queryPrimaryBySkPrefix'
        , queryPrimaryBySkPrefix
@@ -57,11 +56,12 @@ import AWS.DynamoDB.SingleTable as S
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, class ItemCodec, readAV, writeAV)
 import AWS.DynamoDB.SingleTable.DynKeySegment (class DynKeySegmentCodec, DynKeySegment, decodeDynKeySegment, encodeDynKeySegment)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
+import AWS.DynamoDB.SingleTable.Utils (class On1, on1)
 import Control.MonadPlus (guard)
 import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
-import Data.Variant (Variant, case_, on)
+import Data.Variant (Variant)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Ordering (EQ, kind Ordering)
 import Prim.Row as Row
@@ -361,23 +361,17 @@ getItem' _ p = S.getItem
   , sk: printKey p.sk
   }
 
-class Row1 (rl :: RowList) (k :: Symbol) t | rl -> k t
-instance row1 :: Row1 (Cons k t Nil) k t
-
 getItem ::
-  forall env s pks sks k v opts optsRl.
+  forall env s pks sks opts v.
   HasSingleTableDb env =>
   ItemCodec (Variant opts) =>
   FilterRows (GetItem (Key pks) (Key sks)) s opts =>
-  Row.Cons k v () opts =>
-  RowToList opts optsRl =>
-  Row1 optsRl k v =>
-  IsSymbol k =>
+  On1 opts v =>
   Repo s ->
   { pk :: Key pks, sk :: Key sks } ->
   RIO env (Maybe v)
 getItem repo keyPair =
-  map (case_ # on (SProxy :: _ k) identity) <$> getItem' repo keyPair
+  map (on1 :: Variant opts -> v) <$> getItem' repo keyPair
 
 data QueryPrimaryBySkPrefix pk (prefix :: KeySegmentList)
 
@@ -460,17 +454,14 @@ instance isOrdEqEq :: IsOrdEq EQ True
 else instance isOrdEqNEq :: IsOrdEq o False
 
 queryPrimaryBySkPrefix ::
-  forall env s pks prefixs prefix k v opts optsRl.
+  forall env s pks prefixs prefix v opts.
   HasSingleTableDb env =>
   ItemCodec (Variant opts) =>
   ToKeySegmentList prefixs prefix =>
   FilterRows (QueryPrimaryBySkPrefix (Key pks) prefix) s opts =>
-  Row.Cons k v () opts =>
-  RowToList opts optsRl =>
-  Row1 optsRl k v =>
-  IsSymbol k =>
+  On1 opts v =>
   Repo s ->
   { pk :: Key pks, skPrefix :: Key prefixs } ->
   RIO env (Array v)
 queryPrimaryBySkPrefix repo keyPair =
-  map (case_ # on (SProxy :: _ k) identity) <$> queryPrimaryBySkPrefix' repo keyPair
+  map (on1 :: Variant opts -> v) <$> queryPrimaryBySkPrefix' repo keyPair
