@@ -5,7 +5,7 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 import Prelude
 
 import AWS.DynamoDB.SingleTable.DynKeySegment (DynKeySegment, normalizedDynKeySegment)
-import AWS.DynamoDB.SingleTable.Schema (class CanSkPrefix, class MkKey, class ReadKey, class ToKeySegmentList, Key, Repo, getItem, getItem', mkKey, mkRepo, printKey, queryPrimaryBySkPrefix, queryPrimaryBySkPrefix', readKey, readKey_)
+import AWS.DynamoDB.SingleTable.Schema (class CanSkPrefix, class MkKey, class ReadKey, class ToKeySegmentList, Key, Repo, getItem, mkKey, mkRepo, printKey, queryPrimaryBySkPrefix, queryPrimaryBySkPrefix', readKey, readKey_)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
 import Data.Maybe (Maybe, isNothing)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
@@ -134,6 +134,15 @@ queryOrderWithItemsSample =
   queryPrimaryBySkPrefix' repo
     { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
     , skPrefix: mkOrderSk { orderId: normalizedDynKeySegment "1234" }
+    }
+
+queryOrderItemsSample :: forall env. HasSingleTableDb env => RIO env (Array OrderItem)
+queryOrderItemsSample =
+  queryPrimaryBySkPrefix repo
+    { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+    , skPrefix: mkOrderItemSk { orderId: normalizedDynKeySegment "1234"
+                              , orderNum: normalizedDynKeySegment "0001"
+                              }
     }
 
 bla ::

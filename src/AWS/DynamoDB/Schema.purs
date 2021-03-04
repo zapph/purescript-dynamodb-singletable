@@ -416,9 +416,12 @@ else instance canSkPrefixCons ::
     , And chompedPrefix canSkPrefixRest isPrefix
     ) =>
     CanSkPrefix (KC name1 :#: sklTl) (KC name2 :#: prefixTl) isPrefix
-else instance canSkPrefixDyn ::
-    CanSkPrefix sklTl prefixTl r => -- TODO does not support backtrack
+else instance canSkPrefixDynR ::
+    CanSkPrefix sklTl prefixTl r =>
     CanSkPrefix (seg :#: sklTl) (KD name' t :#: prefixTl) r
+else instance canSkPrefixDynL ::
+    CanSkPrefix sklTl prefixTl r =>
+    CanSkPrefix (KD name t :#: sklTl) (seg :#: prefixTl) r
 
 class ChompCommonPrefix (s1 :: Symbol) (s2 :: Symbol) (r1 :: Symbol) (r2 :: Symbol) | s1 s2 -> r1 r2
 
@@ -463,6 +466,7 @@ queryPrimaryBySkPrefix ::
   ToKeySegmentList prefixs prefix =>
   FilterRows (QueryPrimaryBySkPrefix (Key pks) prefix) s opts =>
   Row.Cons k v () opts =>
+  RowToList opts optsRl =>
   Row1 optsRl k v =>
   IsSymbol k =>
   Repo s ->
