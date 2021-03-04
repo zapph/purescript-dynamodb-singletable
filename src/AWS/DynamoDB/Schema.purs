@@ -31,12 +31,24 @@ module AWS.DynamoDB.SingleTable.Schema
        , readKeyContent
        , Repo
        , mkRepo
-       , class GetItem
-       , class GetItemRl
+       , class FilterRows
+       , class FilterRows'
+       , class Filter
+       , GetItem
        , getItem'
        , getItem
        , class IsSubset
+       , class IsSubsetRl
        , class Row1
+       , QueryPrimaryBySkPrefix
+       , queryPrimaryBySkPrefix'
+       , queryPrimaryBySkPrefix
+       , class CanSkPrefix
+       , class StripKCPrefix
+       , class ChompCommonPrefix
+       , class ChompCommonPrefixStep
+       , class IsSymbolEq
+       , class IsOrdEq
        ) where
 
 import Prelude
@@ -51,6 +63,7 @@ import Data.String as String
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Variant (Variant, case_, on)
 import Prim.Boolean (False, True, kind Boolean)
+import Prim.Ordering (EQ, kind Ordering)
 import Prim.Row as Row
 import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
 import Prim.Symbol as Symbol
@@ -58,7 +71,7 @@ import Prim.TypeError (class Fail, Text)
 import RIO (RIO)
 import Record as Record
 import Record.Builder as RecordBuilder
-import Type.Data.Boolean (class If)
+import Type.Data.Boolean (class And, class If)
 import Type.Row (RProxy)
 
 newtype Key (s :: Symbol) = Key String
@@ -287,42 +300,59 @@ newtype Repo (s :: # Type) = Repo {}
 mkRepo :: forall s. Repo s
 mkRepo = Repo {}
 
-class GetItem (r :: # Type) pk sk (opts :: # Type) | r pk sk -> opts
+class FilterRows filter (r :: # Type) (o :: # Type) | filter r -> o
 
-instance getItemI ::
+instance filterRows ::
   ( RowToList r rl
-  , GetItemRl rl pk sk opts
-  ) => GetItem r pk sk opts
+  , FilterRows' filter rl o
+  ) => FilterRows filter r o
 
-class GetItemRl (rl :: RowList) pk sk (opts :: # Type) | rl pk sk -> opts
+class FilterRows' filter (rl :: RowList) (o :: # Type) | filter rl -> o
 
-instance getItemRlNil :: GetItemRl Nil pk sk ()
+instance filterRowsNil ::
+  FilterRows' filter Nil ()
 
-instance getItemRlConsMatch ::
-  ( RowToList r rl
-  , GetItemRl tl pk sk tlOpts
-  , Row.Cons k {|r} tlOpts ifMatch
-  , IsSubset rl (Cons "pk" pk (Cons "sk" sk Nil)) isSubset
-  , If isSubset (RProxy ifMatch) (RProxy tlOpts) (RProxy opts)
-  ) =>
-  GetItemRl (Cons k {|r} tl) pk sk opts
+instance filterRowsCons ::
+  ( FilterRows' filter tl tlOpts
+  , Filter filter a isIncluded
+  , Row.Cons k a tlOpts ifMatch
+  , If isIncluded (RProxy ifMatch) (RProxy tlOpts) (RProxy opts)
+  ) => FilterRows' filter (Cons k a tl) opts
 
-class IsSubset (p :: RowList) (sub :: RowList) (r :: Boolean) | p sub -> r
+class Filter filter a (isIncluded :: Boolean) | filter a -> isIncluded
 
-instance isSubsetT :: IsSubset p Nil True
-else instance isSubsetF :: IsSubset Nil (Cons k v tl) False
-else instance isSubsetMatch ::
-  IsSubset pTl subTl r =>
-  IsSubset (Cons k v pTl) (Cons k v subTl) r
-else instance isSubsetSkip ::
-  IsSubset pTl (Cons k2 v2 subTl) r =>
-  IsSubset (Cons k1 v1 pTl) (Cons k2 v2 subTl) r
+data GetItem pk sk
+
+instance getItemFilterRecord ::
+  ( IsSubset r (pk :: pk, sk :: sk) isSubset
+  ) => Filter (GetItem pk sk) {|r} isSubset
+else instance getItemFilterNonRecord ::
+  Filter (GetItem pk sk) a False
+
+class IsSubset (p :: # Type) (sub :: # Type) (r :: Boolean) | p sub -> r
+
+instance isSubset ::
+  ( RowToList p pRl
+  , RowToList sub subRl
+  , IsSubsetRl pRl subRl isSubset
+  ) => IsSubset p sub isSubset
+
+class IsSubsetRl (p :: RowList) (sub :: RowList) (r :: Boolean) | p sub -> r
+
+instance isSubsetRlT :: IsSubsetRl p Nil True
+else instance isSubsetRlF :: IsSubsetRl Nil (Cons k v tl) False
+else instance isSubsetRlMatch ::
+  IsSubsetRl pTl subTl r =>
+  IsSubsetRl (Cons k v pTl) (Cons k v subTl) r
+else instance isSubsetRlSkip ::
+  IsSubsetRl pTl (Cons k2 v2 subTl) r =>
+  IsSubsetRl (Cons k1 v1 pTl) (Cons k2 v2 subTl) r
 
 getItem' ::
   forall env s pks sks opts.
   HasSingleTableDb env =>
   ItemCodec (Variant opts) =>
-  GetItem s (Key pks) (Key sks) opts =>
+  FilterRows (GetItem (Key pks) (Key sks)) s opts =>
   Repo s ->
   { pk :: Key pks, sk :: Key sks } ->
   RIO env (Maybe (Variant opts))
@@ -338,7 +368,7 @@ getItem ::
   forall env s pks sks k v opts optsRl.
   HasSingleTableDb env =>
   ItemCodec (Variant opts) =>
-  GetItem s (Key pks) (Key sks) opts =>
+  FilterRows (GetItem (Key pks) (Key sks)) s opts =>
   Row.Cons k v () opts =>
   RowToList opts optsRl =>
   Row1 optsRl k v =>
@@ -348,3 +378,95 @@ getItem ::
   RIO env (Maybe v)
 getItem repo keyPair =
   map (case_ # on (SProxy :: _ k) identity) <$> getItem' repo keyPair
+
+data QueryPrimaryBySkPrefix pk (prefix :: KeySegmentList)
+
+instance queryPrimaryBySkPrefixFilterRecord ::
+  ( Row.Cons "pk" pk _r1 r
+  , Row.Cons "sk" (Key sks) _r2 r
+  , ToKeySegmentList sks skl
+  , CanSkPrefix skl prefix canSkPrefix
+  ) => Filter (QueryPrimaryBySkPrefix pk prefix) {|r} canSkPrefix
+else instance queryPrimaryBySkPrefixFilterNonRecord ::
+  Filter (QueryPrimaryBySkPrefix pk prefix) a False
+
+queryPrimaryBySkPrefix' ::
+  forall env s pks prefixs prefix opts.
+  HasSingleTableDb env =>
+  ItemCodec (Variant opts) =>
+  ToKeySegmentList prefixs prefix =>
+  FilterRows (QueryPrimaryBySkPrefix (Key pks) prefix) s opts =>
+  Repo s ->
+  { pk :: Key pks, skPrefix :: Key prefixs } ->
+  RIO env (Array (Variant opts))
+queryPrimaryBySkPrefix' repo keyPair = S.queryPrimaryBySkPrefix
+  { pk: printKey keyPair.pk
+  , skPrefix: printKey keyPair.skPrefix
+  }
+
+class CanSkPrefix (skl :: KeySegmentList) (prefix :: KeySegmentList) (canPrefix :: Boolean) | skl prefix -> canPrefix
+
+instance canSkPrefixNilP :: CanSkPrefix skl KNil True
+else instance canSkPrefixNilS :: CanSkPrefix KNil p False
+else instance canSkPrefixCons ::
+    ( ChompCommonPrefix name1 name2 r1 r2
+    , IsSymbolEq r2 "" chompedPrefix
+    , StripKCPrefix r1 sklTl sklTl'
+    , CanSkPrefix sklTl' prefixTl canSkPrefixRest
+    , And chompedPrefix canSkPrefixRest isPrefix
+    ) =>
+    CanSkPrefix (KC name1 :#: sklTl) (KC name2 :#: prefixTl) isPrefix
+else instance canSkPrefixDyn ::
+    CanSkPrefix sklTl prefixTl r => -- TODO does not support backtrack
+    CanSkPrefix (seg :#: sklTl) (KD name' t :#: prefixTl) r
+
+class ChompCommonPrefix (s1 :: Symbol) (s2 :: Symbol) (r1 :: Symbol) (r2 :: Symbol) | s1 s2 -> r1 r2
+
+instance chompCommonPrefixNil1 :: ChompCommonPrefix "" s2 "" s2
+else instance chompCommonPrefixNil2 :: ChompCommonPrefix s1 "" s1 ""
+else instance chompCommonPrefixCons ::
+  ( Symbol.Cons h1 t1 s1
+  , Symbol.Cons h2 t2 s2
+  , IsSymbolEq h1 h2 isEq
+  , ChompCommonPrefixStep isEq t1 t2 s1 s2 r1 r2
+  ) => ChompCommonPrefix s1 s2 r1 r2
+
+class ChompCommonPrefixStep (wasEq :: Boolean) (t1 :: Symbol) (t2 :: Symbol) (s1 :: Symbol) (s2 :: Symbol) (r1 :: Symbol) (r2 :: Symbol) | wasEq t1 t2 s1 s2 -> r1 r2
+
+instance chompCommonPrefixStepTrue ::
+  ChompCommonPrefix t1 t2 r1 r2 =>
+  ChompCommonPrefixStep True t1 t2 s1 s2 r1 r2
+instance chompCommonPrefixStepFalse ::
+  ChompCommonPrefixStep False s1 s2 t1 t2 s1 s2
+
+
+class StripKCPrefix (rest :: Symbol) (tl :: KeySegmentList) (o :: KeySegmentList) | rest tl -> o
+
+instance stripKCPrefixEmpty :: StripKCPrefix "" tl tl
+else instance stripKCPrefixNonEmpty :: StripKCPrefix c tl (KC c :#: tl)
+
+class IsSymbolEq (s1 :: Symbol) (s2 :: Symbol) (isEqual :: Boolean) | s1 s2 -> isEqual
+
+instance isSymbolEq ::
+  ( Symbol.Compare s1 s2 ord
+  , IsOrdEq ord isEq
+  ) => IsSymbolEq s1 s2 isEq
+
+class IsOrdEq (ord :: Ordering) (isEq :: Boolean) | ord -> isEq
+instance isOrdEqEq :: IsOrdEq EQ True
+else instance isOrdEqNEq :: IsOrdEq o False
+
+queryPrimaryBySkPrefix ::
+  forall env s pks prefixs prefix k v opts optsRl.
+  HasSingleTableDb env =>
+  ItemCodec (Variant opts) =>
+  ToKeySegmentList prefixs prefix =>
+  FilterRows (QueryPrimaryBySkPrefix (Key pks) prefix) s opts =>
+  Row.Cons k v () opts =>
+  Row1 optsRl k v =>
+  IsSymbol k =>
+  Repo s ->
+  { pk :: Key pks, skPrefix :: Key prefixs } ->
+  RIO env (Array v)
+queryPrimaryBySkPrefix repo keyPair =
+  map (case_ # on (SProxy :: _ k) identity) <$> queryPrimaryBySkPrefix' repo keyPair

@@ -5,11 +5,13 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 import Prelude
 
 import AWS.DynamoDB.SingleTable.DynKeySegment (DynKeySegment, normalizedDynKeySegment)
-import AWS.DynamoDB.SingleTable.Schema (class MkKey, class ReadKey, class ToKeySegmentList, Key, Repo, getItem, mkKey, mkRepo, printKey, readKey, readKey_)
+import AWS.DynamoDB.SingleTable.Schema (class CanSkPrefix, class MkKey, class ReadKey, class ToKeySegmentList, Key, Repo, getItem, getItem', mkKey, mkRepo, printKey, queryPrimaryBySkPrefix, queryPrimaryBySkPrefix', readKey, readKey_)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
 import Data.Maybe (Maybe, isNothing)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Variant (Variant)
 import Effect.Aff (Aff)
+import Prim.Boolean (True)
 import RIO (RIO)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldContain, shouldEqual, shouldSatisfy)
@@ -56,37 +58,51 @@ keyReadSpec = describe "key read" do
 
 type UserPk = Key "USER#_<username>"
 
+type ProfileSk = Key "#USER#_<username>"
+type OrderSk = Key "ORDER#_<orderId>"
+type OrderItemSk = Key "ORDER#_<orderId>#_<orderNum>"
+
 mkUserPk :: { username :: DynKeySegment } -> UserPk
 mkUserPk = mkKey
-
-type ProfileSk = Key "USER#_<username>"
 
 mkProfileSk :: { username :: DynKeySegment } -> ProfileSk
 mkProfileSk = mkKey
 
-type OrderSk = Key "ORDER#_<orderId>"
-
 mkOrderSk :: { orderId :: DynKeySegment } -> OrderSk
 mkOrderSk = mkKey
 
+mkOrderItemSk ::
+  { orderId :: DynKeySegment, orderNum :: DynKeySegment } ->
+  OrderItemSk
+mkOrderItemSk = mkKey
+
+blankSk :: Key ""
+blankSk = mkKey {}
+
 type User =
-  { pk :: UserPk
-  , sk :: ProfileSk
+  { pk :: Key "USER#_<username>"
+  , sk :: Key "#USER#_<username>"
   , username :: String
   , fullName :: String
   , email :: String
   }
 
 type Order =
-  { pk :: UserPk
-  , sk :: OrderSk
+  { pk :: Key "USER#_<username>"
+  , sk :: Key "ORDER#_<orderId>"
   , orderId :: String
   , status :: String
+  }
+
+type OrderItem =
+  { pk :: Key "USER#_<username>"
+  , sk :: Key "ORDER#_<orderId>#_<orderNum>"
   }
 
 type Schema =
   ( "user" :: User
   , "order" :: Order
+  , "orderItem" :: OrderItem
   )
 
 repo :: Repo Schema
@@ -105,6 +121,44 @@ getOrderSample =
     { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
     , sk: mkOrderSk { orderId: normalizedDynKeySegment "1234" }
     }
+
+queryUserWithOrderAndItemsSample :: forall env. HasSingleTableDb env => RIO env (Array (Variant (user :: User, order :: Order, orderItem :: OrderItem)))
+queryUserWithOrderAndItemsSample =
+  queryPrimaryBySkPrefix' repo
+    { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+    , skPrefix: blankSk
+    }
+
+queryOrderWithItemsSample :: forall env. HasSingleTableDb env => RIO env (Array (Variant (order :: Order, orderItem :: OrderItem)))
+queryOrderWithItemsSample =
+  queryPrimaryBySkPrefix' repo
+    { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+    , skPrefix: mkOrderSk { orderId: normalizedDynKeySegment "1234" }
+    }
+
+bla ::
+  forall sks pfxs skl pfx.
+  ToKeySegmentList sks skl =>
+  ToKeySegmentList pfxs pfx =>
+  CanSkPrefix skl pfx True =>
+  SProxy sks ->
+  SProxy pfxs ->
+  Unit
+bla _ _ = unit
+
+
+--boo :: Unit
+--boo = bla (SProxy :: _ "ORDER#_<orderId>") (SProxy :: _ "ORDER#_<orderId>#_<orderNum>")
+
+--queryOrderItemsSample :: forall env. HasSingleTableDb env => RIO env (Array _)
+--queryOrderItemsSample =
+--   queryPrimaryBySkPrefix' repo
+--     { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+--     , skPrefix: mkOrderItemSk { orderId: normalizedDynKeySegment "1234"
+--                               , orderNum: normalizedDynKeySegment ""
+--                               }
+--     }
+
 
 -- Utils
 
