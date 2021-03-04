@@ -1,10 +1,13 @@
 module AWS.DynamoDB.SingleTable.Utils.SymbolUtils
        ( class IsCharUpper
        , class IsWordAllUpper
+       , class ChompCommonPrefix
+       , class ChompCommonPrefixStep
+       , class IsSymbolEq
+       , class IsOrdEq
        ) where
 
-import Data.Symbol (SProxy(..))
-import Prim.Boolean (kind Boolean)
+import Prim.Boolean (False, True, kind Boolean)
 import Prim.Ordering (EQ, kind Ordering)
 import Prim.Symbol as Symbol
 
@@ -77,3 +80,33 @@ else instance symbolSplitAccNoMatch ::
   ) => SymbolSplitAcc ord sep h tl acc tlR
 
 data SLProxy (slist :: SymbolList) = SLProxy
+
+class ChompCommonPrefix (s1 :: Symbol) (s2 :: Symbol) (r1 :: Symbol) (r2 :: Symbol) | s1 s2 -> r1 r2
+
+instance chompCommonPrefixNil1 :: ChompCommonPrefix "" s2 "" s2
+else instance chompCommonPrefixNil2 :: ChompCommonPrefix s1 "" s1 ""
+else instance chompCommonPrefixCons ::
+  ( Symbol.Cons h1 t1 s1
+  , Symbol.Cons h2 t2 s2
+  , IsSymbolEq h1 h2 isEq
+  , ChompCommonPrefixStep isEq t1 t2 s1 s2 r1 r2
+  ) => ChompCommonPrefix s1 s2 r1 r2
+
+class ChompCommonPrefixStep (wasEq :: Boolean) (t1 :: Symbol) (t2 :: Symbol) (s1 :: Symbol) (s2 :: Symbol) (r1 :: Symbol) (r2 :: Symbol) | wasEq t1 t2 s1 s2 -> r1 r2
+
+instance chompCommonPrefixStepTrue ::
+  ChompCommonPrefix t1 t2 r1 r2 =>
+  ChompCommonPrefixStep True t1 t2 s1 s2 r1 r2
+instance chompCommonPrefixStepFalse ::
+  ChompCommonPrefixStep False s1 s2 t1 t2 s1 s2
+
+class IsSymbolEq (s1 :: Symbol) (s2 :: Symbol) (isEqual :: Boolean) | s1 s2 -> isEqual
+
+instance isSymbolEq ::
+  ( Symbol.Compare s1 s2 ord
+  , IsOrdEq ord isEq
+  ) => IsSymbolEq s1 s2 isEq
+
+class IsOrdEq (ord :: Ordering) (isEq :: Boolean) | ord -> isEq
+instance isOrdEqEq :: IsOrdEq EQ True
+else instance isOrdEqNEq :: IsOrdEq o False
