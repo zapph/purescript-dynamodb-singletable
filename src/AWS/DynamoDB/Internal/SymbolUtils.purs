@@ -5,6 +5,7 @@ module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
        , class ChompCommonPrefixStep
        , class IsSymbolEq
        , class IsOrdEq
+       , class SymbolEq
        ) where
 
 import Prim.Boolean (False, True, kind Boolean)
@@ -110,3 +111,7 @@ instance isSymbolEq ::
 class IsOrdEq (ord :: Ordering) (isEq :: Boolean) | ord -> isEq
 instance isOrdEqEq :: IsOrdEq EQ True
 else instance isOrdEqNEq :: IsOrdEq o False
+
+class SymbolEq (s1 :: Symbol) (s2 :: Symbol)
+
+instance symbolEqI :: IsSymbolEq s1 s2 True => SymbolEq s1 s2
