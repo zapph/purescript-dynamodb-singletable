@@ -35,8 +35,8 @@ import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
-import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, STDbItem, STDbItem', SingleTableDb(..), dbL)
-import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, STDbItem, STDbItem', dbL) as E
+import AWS.DynamoDB.SingleTable.Types (class HasPath, class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, SingleTableDb(..), dbL)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, dbL) as E
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Alt ((<|>))
 import Control.Monad.Error.Class (class MonadThrow)
@@ -114,12 +114,13 @@ transactWriteItems opsFs = do
   pure unit
 
 insertItem ::
-  forall env a.
+  forall env pk a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
-  STDbItem a ->
-  (Maybe (Condition (STDbItem' a))) ->
-  RIO env (Maybe (STDbItem a))
+  ItemCodec a =>
+  HasPath "pk" pk a =>
+  a ->
+  (Maybe (Condition a)) ->
+  RIO env (Maybe a)
 insertItem item conditionExprF = putItem { item, returnOld: false } finalKeyConditionF
   where
   finalKeyConditionF =
@@ -129,12 +130,12 @@ insertItem item conditionExprF = putItem { item, returnOld: false } finalKeyCond
 putItem ::
   forall env a.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
-  { item :: STDbItem a
+  ItemCodec a =>
+  { item :: a
   , returnOld :: Boolean
   } ->
-  (Maybe (Condition (STDbItem' a))) ->
-  RIO env (Maybe (STDbItem a))
+  (Maybe (Condition a)) ->
+  RIO env (Maybe a)
 putItem { item, returnOld } condition = do
   table <- getTable
   res <- Cl.putItem
@@ -163,14 +164,15 @@ data UpdateReturnValues =
   | URAllOld
 
 updateExistingItem ::
-  forall env a.
+  forall env a pk.
   HasSingleTableDb env =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
+  HasPath "pk" pk a =>
   UpdateReturnValues ->
-  UE.Update (STDbItem' a) Unit ->
-  (Maybe (Condition (STDbItem' a))) ->
+  UE.Update a Unit ->
+  (Maybe (Condition a)) ->
   PrimaryKey ->
-  RIO env (STDbItem a)
+  RIO env a
 updateExistingItem retVals updateF keyConditionF pk = do
   updateItem retVals updateF finalKeyConditionF pk
   >>= require "Item"
@@ -182,23 +184,23 @@ updateExistingItem retVals updateF keyConditionF pk = do
 createOrUpdateItem ::
   forall env r.
   HasSingleTableDb env =>
-  ItemCodec {|r} =>
+  ItemCodec r =>
   UpdateReturnValues ->
   UE.Update r Unit ->
   (Maybe (Condition r)) ->
   PrimaryKey ->
-  RIO env (Maybe {|r})
+  RIO env (Maybe r)
 createOrUpdateItem = updateItem
 
 updateItem ::
   forall env r.
   HasSingleTableDb env =>
-  ItemCodec {|r} =>
+  ItemCodec r =>
   UpdateReturnValues ->
   UE.Update r Unit ->
   (Maybe (Condition r)) ->
   PrimaryKey ->
-  RIO env (Maybe {|r})
+  RIO env (Maybe r)
 updateItem retVals updateF keyConditionF {pk, sk} = do
   table <- getTable
   res <- Cl.updateItem (params table)
@@ -353,26 +355,26 @@ instance getLastEvaluatedKeyRows ::
   ) => GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR
 
 query ::
-  forall env a index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond lastEvaluatedKeyR.
+  forall env a index pkName pkValue skName skValue _r skCond pkSkCond lastEvaluatedKeyR.
   HasSingleTableDb env =>
   IsSTDbIndex index pkName skName =>
   IndexValue pkValue =>
   IndexValue skValue =>
   IsSymbol pkName =>
-  Row.Cons pkName pkValue _r1 (STDbItem' a) =>
-  Row.Cons skName skValue _r2 (STDbItem' a) =>
+  HasPath pkName pkValue a =>
+  HasPath skName skValue a =>
   Row.Cons pkName String skCond pkSkCond =>
   Row.Cons skName String () skCond =>
-  Row.Union skCond _r3 pkSkCond =>
+  Row.Union skCond _r pkSkCond =>
   GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR =>
   ItemCodec { | lastEvaluatedKeyR } =>
-  ItemCodec (STDbItem a) =>
+  ItemCodec a =>
   index ->
   { pk :: String
-  , skCondition :: Condition skCond
+  , skCondition :: Condition {|skCond}
   , scanIndexForward :: Boolean
   } ->
-  RIO env { items :: Array (STDbItem a), lastEvaluatedKey :: Maybe { | lastEvaluatedKeyR } }
+  RIO env { items :: Array a, lastEvaluatedKey :: Maybe { | lastEvaluatedKeyR } }
 query index { pk, skCondition, scanIndexForward } = do
   table <- getTable
   res <- Cl.query (params table)
@@ -384,9 +386,7 @@ query index { pk, skCondition, scanIndexForward } = do
     }
 
   where
-
-
-    pkCondition :: Condition pkSkCond
+    pkCondition :: Condition {|pkSkCond}
     pkCondition = CE.opPath (SProxy :: _ pkName) `cEq` CE.opValue pk
 
     pkSkCondition = pkCondition `cAnd` (CE.expandCondition skCondition)
@@ -410,26 +410,27 @@ type Repo a =
        forall env.
        HasSingleTableDb env =>
        PrimaryKey ->
-       RIO env (Maybe {|a})
+       RIO env (Maybe a)
   , deleteItem ::
        forall env.
        HasSingleTableDb env =>
        PrimaryKey ->
-       RIO env (Maybe {|a})
+       RIO env (Maybe a)
   , putItem ::
        forall env.
        HasSingleTableDb env =>
-       { item :: {|a}
+       { item :: a
        , returnOld :: Boolean
        } ->
        (Maybe (Condition a)) ->
-       RIO env (Maybe {|a})
+       RIO env (Maybe a)
   , insertItem ::
-       forall env.
+       forall env pk.
        HasSingleTableDb env =>
-       {|a} ->
+       HasPath "pk" pk a =>
+       a ->
        (Maybe (Condition a)) ->
-       RIO env (Maybe {|a})
+       RIO env (Maybe a)
   , createOrUpdateItem ::
       forall env.
       HasSingleTableDb env =>
@@ -437,38 +438,39 @@ type Repo a =
       UE.Update a Unit ->
       (Maybe (Condition a)) ->
       PrimaryKey ->
-      RIO env (Maybe {|a})
+      RIO env (Maybe a)
   , updateExistingItem ::
-      forall env.
+      forall env pk.
       HasSingleTableDb env =>
+      HasPath "pk" pk a =>
       UpdateReturnValues ->
       UE.Update a Unit ->
       (Maybe (Condition a)) ->
       PrimaryKey ->
-      RIO env {|a}
+      RIO env a
   , query ::
-      forall env index pkName pkValue skName skValue _r1 _r2 _r3 skCond pkSkCond lastEvaluatedKeyR.
+      forall env index pkName pkValue skName skValue _r skCond pkSkCond lastEvaluatedKeyR.
       HasSingleTableDb env =>
       IsSTDbIndex index pkName skName =>
       IndexValue pkValue =>
       IndexValue skValue =>
       IsSymbol pkName =>
-      Row.Cons pkName pkValue _r1 a =>
-      Row.Cons skName skValue _r2 a =>
+      HasPath pkName pkValue a =>
+      HasPath skName skValue a =>
       Row.Cons pkName String skCond pkSkCond =>
       Row.Cons skName String () skCond =>
-      Row.Union skCond _r3 pkSkCond =>
+      Row.Union skCond _r pkSkCond =>
       GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR =>
       ItemCodec { | lastEvaluatedKeyR } =>
-      ItemCodec { | a } =>
+      ItemCodec a =>
       index ->
       { pk :: String
-      , skCondition :: Condition skCond
+      , skCondition :: Condition {|skCond}
       , scanIndexForward :: Boolean
       } ->
-      RIO env { items :: Array { | a }, lastEvaluatedKey :: Maybe { | lastEvaluatedKeyR } }
+      RIO env { items :: Array a, lastEvaluatedKey :: Maybe { | lastEvaluatedKeyR } }
   , txPutItem ::
-      {|a} -> TransactWriteItemsOperationF
+      a -> TransactWriteItemsOperationF
   , txDeleteItem ::
       PrimaryKey -> TransactWriteItemsOperationF
   , txUpdateItem ::
@@ -481,9 +483,9 @@ type Repo a =
   }
 
 mkRepo ::
-  forall r.
-  ItemCodec (STDbItem r) =>
-  Repo (STDbItem' r)
+  forall a.
+  ItemCodec a =>
+  Repo a
 mkRepo =
   { getItem: getItem
   , deleteItem: deleteItem

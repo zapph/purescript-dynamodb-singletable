@@ -33,7 +33,7 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, avS, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CB
-import AWS.DynamoDB.SingleTable.Types (AttributeValue, Path, STDbItem', pathToString, spToPath)
+import AWS.DynamoDB.SingleTable.Types (class HasPath, AttributeValue, Path, pathToString, spToPath)
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
@@ -44,30 +44,28 @@ import Data.Traversable (traverse)
 import Prim.Row as Row
 import Unsafe.Coerce (unsafeCoerce)
 
-
-
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html
 
-data Condition (r :: # Type) =
-  CComp (Operand' r) Comparator (Operand' r)
-  | CBetween (Operand' r) { min :: Operand' r, max :: Operand' r }
-  | CIn (Operand' r) (NonEmptyArray (Operand' r))
-  | CAnd (Condition r) (Condition r)
-  | COr (Condition r) (Condition r)
-  | CNot (Condition r)
+data Condition a =
+  CComp (Operand' a) Comparator (Operand' a)
+  | CBetween (Operand' a) { min :: Operand' a, max :: Operand' a }
+  | CIn (Operand' a) (NonEmptyArray (Operand' a))
+  | CAnd (Condition a) (Condition a)
+  | COr (Condition a) (Condition a)
+  | CNot (Condition a)
     -- funcs
-  | CAttributeExists (Path r)
-  | CAttributeNotExists (Path r)
---  | CAttributeType (Path r) Typ
-  | CBeginsWith (Path r) String
-  | CContains (Path r) (Operand' r)
+  | CAttributeExists (Path a)
+  | CAttributeNotExists (Path a)
+--  | CAttributeType (Path a) Typ
+  | CBeginsWith (Path a) String
+  | CContains (Path a) (Operand' a)
 
-data Operand (r :: # Type) (v :: Type) =
-  OPath (Path r)
+data Operand a (v :: Type) =
+  OPath (Path a)
   | OValue AttributeValue
 
-type Operand' (r :: # Type) =
-  Exists (Operand r)
+type Operand' a =
+  Exists (Operand a)
 
 data Comparator =
   CompEq
@@ -125,35 +123,37 @@ cOr = COr
 cNot :: forall r. Condition r -> Condition r
 cNot = CNot
 
-cItemExists ::
-  forall r.
-  Condition (STDbItem' r)
-cItemExists =
-  CAttributeExists $ spToPath (SProxy :: _ "pk")
-
-cItemNotExists ::
-  forall r.
-  Condition (STDbItem' r)
-cItemNotExists =
-  CAttributeNotExists $ spToPath (SProxy :: _ "pk")
-
 cAttributeExists ::
-  forall r _r k v.
-  Row.Cons k (Maybe v) _r r =>
+  forall r k v.
   IsSymbol k =>
+  HasPath k v r =>
   SProxy k ->
   Condition r
 cAttributeExists sp =
   CAttributeExists (spToPath sp)
 
 cAttributeNotExists ::
-  forall r _r k v.
-  Row.Cons k (Maybe v) _r r =>
+  forall k pk r.
+  HasPath k pk r =>
   IsSymbol k =>
   SProxy k ->
   Condition r
 cAttributeNotExists sp =
   CAttributeNotExists (spToPath sp)
+
+cItemExists ::
+  forall pk r.
+  HasPath "pk" pk r =>
+  Condition r
+cItemExists =
+  cAttributeExists (SProxy :: _ "pk")
+
+cItemNotExists ::
+  forall pk r.
+  HasPath "pk" pk r =>
+  Condition r
+cItemNotExists =
+  cAttributeNotExists (SProxy :: _ "pk")
 
 class CanBeginWith a
 instance canBeginWithString :: CanBeginWith String
@@ -166,7 +166,7 @@ cBeginsWith ::
   IsSymbol k =>
   SProxy k ->
   String ->
-  Condition r
+  Condition {|r}
 cBeginsWith sp substring =
   CBeginsWith (spToPath sp) substring
 
@@ -187,8 +187,8 @@ cContains ::
   Row.Cons k v _r r =>
   IsSymbol k =>
   SProxy k ->
-  Operand r c ->
-  Condition r
+  Operand {|r} c ->
+  Condition {|r}
 cContains sp op =
   CContains (spToPath sp) (mkExists op)
 
@@ -197,7 +197,7 @@ opPath ::
   IsSymbol path =>
   Row.Cons path v _r r =>
   SProxy path ->
-  Operand r v
+  Operand {|r} v
 opPath = OPath <<< spToPath
 
 opValue ::
@@ -264,10 +264,10 @@ buildOp (OPath p) = CB.addName (pathToString p)
 buildOp (OValue v) = CB.addValue v
 
 expandCondition ::
-  forall a _a a'.
-  Row.Union a _a a' =>
-  Condition a ->
-  Condition a'
+  forall r _r r'.
+  Row.Union r _r r' =>
+  Condition {|r} ->
+  Condition {|r'}
 expandCondition =
   unsafeCoerce
 

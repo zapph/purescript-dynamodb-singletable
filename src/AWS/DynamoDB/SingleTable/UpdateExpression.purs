@@ -27,7 +27,7 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
-import AWS.DynamoDB.SingleTable.Types (AttributeValue, Path, pathToString, spToPath)
+import AWS.DynamoDB.SingleTable.Types (class HasPath, AttributeValue, Path, pathToString, spToPath)
 import Control.Monad.State (class MonadState, State, StateT, execState, execStateT)
 import Control.Monad.State.Class (modify_)
 import Control.Monad.Trans.Class (lift)
@@ -42,18 +42,17 @@ import Data.Maybe (Maybe(..))
 import Data.Set (Set)
 import Data.String as String
 import Data.Symbol (class IsSymbol, SProxy)
-import Prim.Row as Row
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html
 
-data UpdateAction (r :: # Type) =
+data UpdateAction r =
   UASet (SetValueE r)
   | UARemove
   | UAAdd AttributeValue
   | UADelete AttributeValue
 
-newtype Update (r :: # Type) a = Update (State (Map (Path r) (UpdateAction r)) a)
+newtype Update r a = Update (State (Map (Path r) (UpdateAction r)) a)
 
 derive newtype instance updateFunctor :: Functor (Update r)
 derive newtype instance updateApply :: Apply (Update r)
@@ -144,7 +143,7 @@ buildParams (Update u) =
     mkPart prefix Nil = Nothing
     mkPart prefix l = Just $ prefix <> " " <> intercalate ", " l
 
-data SetValue (r :: # Type) (v :: Type) =
+data SetValue r v =
   SVOperand (Operand r v)
   | SVPlus (Operand r v) (Operand r v)
   | SVMinus (Operand r v) (Operand r v)
@@ -173,9 +172,9 @@ setValueMinus ::
   SetValue r v
 setValueMinus = SVMinus
 
-type SetValueE (r :: # Type) = Exists (SetValue r)
+type SetValueE r = Exists (SetValue r)
 
-data Operand (r :: # Type) (v :: Type) =
+data Operand r v =
   OPath (Path r)
   | OValue AttributeValue
   | OIfNotExists (Path r) (Operand r v)
@@ -185,9 +184,9 @@ data Operand (r :: # Type) (v :: Type) =
   | OListAppend (Operand r v) (Operand r v)
 
 opPath ::
-  forall path v _r r.
+  forall path v r.
   IsSymbol path =>
-  Row.Cons path v _r r =>
+  HasPath path v r =>
   SProxy path ->
   Operand r v
 opPath = OPath <<< spToPath
@@ -199,10 +198,9 @@ opValue ::
   Operand r v
 opValue = OValue <<< writeAV
 
-
 opIfNotExists ::
-  forall path v _r r typ.
-  Row.Cons path typ _r r =>
+  forall path v r typ.
+  HasPath path v r =>
   Settable typ v =>
   IsSymbol path =>
   SProxy path ->
@@ -224,9 +222,9 @@ instance settableMaybe :: Settable (Maybe v) v
 else instance settableDirect :: Settable typ typ
 
 set ::
-  forall r _r k typ v.
+  forall r k typ v.
   IsSymbol k =>
-  Row.Cons k typ _r r =>
+  HasPath k typ r =>
   Settable typ v =>
   AVCodec v =>
   SProxy k ->
@@ -235,9 +233,9 @@ set ::
 set sp sv = addAction sp (UASet (mkExists sv))
 
 set_ ::
-  forall r _r k typ v.
+  forall r k typ v.
   IsSymbol k =>
-  Row.Cons k typ _r r =>
+  HasPath k typ r =>
   Settable typ v =>
   AVCodec v =>
   SProxy k ->
@@ -246,17 +244,17 @@ set_ ::
 set_ sp = set sp <<< setValue
 
 remove ::
-  forall r _r k v.
+  forall r k v.
   IsSymbol k =>
-  Row.Cons k (Maybe v) _r r =>
+  HasPath k (Maybe v) r =>
   SProxy k ->
   Update r Unit
 remove sp = addAction sp UARemove
 
 setOrRemove ::
-  forall r _r k v.
+  forall r k v.
   IsSymbol k =>
-  Row.Cons k (Maybe v) _r r =>
+  HasPath k (Maybe v) r =>
   AVCodec v =>
   SProxy k ->
   Maybe v ->
@@ -271,9 +269,9 @@ instance addableSet :: Addable (Set v) (Set v)
 instance addableMaybeSet :: Addable (Maybe (Set v)) (Set v)
 
 add ::
-  forall r _r k typ addend.
+  forall r k typ addend.
   IsSymbol k =>
-  Row.Cons k typ _r r =>
+  HasPath k typ r =>
   Addable typ addend =>
   AVCodec addend =>
   SProxy k ->
@@ -287,9 +285,9 @@ instance deletableSet :: Deletable (Set v) (Set v)
 instance deletableMaybeSet :: Deletable (Maybe (Set v)) (Set v)
 
 delete ::
-  forall r _r k typ set.
+  forall r k v typ set.
   IsSymbol k =>
-  Row.Cons k typ _r r =>
+  HasPath k v r =>
   Deletable typ set =>
   AVCodec set =>
   SProxy k ->
@@ -298,9 +296,9 @@ delete ::
 delete sp v = addAction sp (UADelete (writeAV v))
 
 addAction ::
-  forall r _r k typ v.
+  forall r k typ v.
   IsSymbol k =>
-  Row.Cons k typ _r r =>
+  HasPath k typ r =>
   Settable typ v =>
   SProxy k ->
   UpdateAction r ->

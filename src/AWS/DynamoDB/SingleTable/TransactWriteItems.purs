@@ -12,7 +12,7 @@ import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, writeItem)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
-import AWS.DynamoDB.SingleTable.Types (AVObject(..), STDbItem, PrimaryKey, TransactWriteItemsOperation)
+import AWS.DynamoDB.SingleTable.Types (AVObject(..), PrimaryKey, TransactWriteItemsOperation)
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Data.Maybe (Maybe)
 import Data.Traversable (sequence)
@@ -25,8 +25,9 @@ newtype TransactWriteItemsOperationF
 
 txPutItem ::
   forall a.
-  ItemCodec (STDbItem a) =>
-  STDbItem a -> TransactWriteItemsOperationF
+  ItemCodec a =>
+  a ->
+  TransactWriteItemsOperationF
 txPutItem item =
   TransactWriteItemsOperationF
     ( \table ->
@@ -59,7 +60,7 @@ txDeleteItem { pk, sk } =
 
 txUpdateItem ::
   forall r.
-  ItemCodec { | r } =>
+  ItemCodec r =>
   PrimaryKey ->
   UE.Update r Unit ->
   (Maybe (Condition r)) ->
@@ -93,7 +94,7 @@ txUpdateItem { pk, sk } updateF keyConditionF = do
 
 txConditionCheck ::
   forall r.
-  ItemCodec { | r } =>
+  ItemCodec r =>
   PrimaryKey ->
   Condition r ->
   TransactWriteItemsOperationF
