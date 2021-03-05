@@ -1,7 +1,5 @@
 module AWS.DynamoDB.SingleTable.Schema
-       ( Repo
-       , mkRepo
-       , GetItem
+       ( GetItem
        , getItem'
        , getItem
        , QueryPrimaryBySkPrefix
@@ -13,6 +11,7 @@ module AWS.DynamoDB.SingleTable.Schema
 
 import Prelude
 
+import AWS.DynamoDB.SingleTable (Repo, mkRepo)
 import AWS.DynamoDB.SingleTable as S
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec)
 import AWS.DynamoDB.SingleTable.Internal (class Filter, class FilterRows, class IsSubset, class On1, on1)
@@ -25,11 +24,6 @@ import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row as Row
 import RIO (RIO)
 import Type.Data.Boolean (class And)
-
-newtype Repo (s :: # Type) = Repo {}
-
-mkRepo :: forall s. Repo s
-mkRepo = Repo {}
 
 data GetItem pk sk
 
@@ -44,10 +38,10 @@ getItem' ::
   HasSingleTableDb env =>
   ItemCodec (Variant opts) =>
   FilterRows (GetItem (Key pks) (Key sks)) s opts =>
-  Repo s ->
+  Repo (Variant s) ->
   { pk :: Key pks, sk :: Key sks } ->
   RIO env (Maybe (Variant opts))
-getItem' _ p = S.getItem
+getItem' repo p = S.getItem (mkRepo :: _ (Variant opts)) -- cheat
   { pk: printKey p.pk
   , sk: printKey p.sk
   }
@@ -58,7 +52,7 @@ getItem ::
   ItemCodec (Variant opts) =>
   FilterRows (GetItem (Key pks) (Key sks)) s opts =>
   On1 opts v =>
-  Repo s ->
+  Repo (Variant s) ->
   { pk :: Key pks, sk :: Key sks } ->
   RIO env (Maybe v)
 getItem repo keyPair =
@@ -81,7 +75,7 @@ queryPrimaryBySkPrefix' ::
   ItemCodec (Variant opts) =>
   ToKeySegmentList prefixs prefix =>
   FilterRows (QueryPrimaryBySkPrefix (Key pks) prefix) s opts =>
-  Repo s ->
+  Repo (Variant s) ->
   { pk :: Key pks, skPrefix :: Key prefixs } ->
   RIO env (Array (Variant opts))
 queryPrimaryBySkPrefix' repo keyPair = S.queryPrimaryBySkPrefix
@@ -120,7 +114,7 @@ queryPrimaryBySkPrefix ::
   ToKeySegmentList prefixs prefix =>
   FilterRows (QueryPrimaryBySkPrefix (Key pks) prefix) s opts =>
   On1 opts v =>
-  Repo s ->
+  Repo (Variant s) ->
   { pk :: Key pks, skPrefix :: Key prefixs } ->
   RIO env (Array v)
 queryPrimaryBySkPrefix repo keyPair =

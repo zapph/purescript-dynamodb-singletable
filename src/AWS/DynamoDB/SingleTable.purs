@@ -36,7 +36,7 @@ import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
 import Data.Lens (view)
 import Data.Maybe (Maybe(..))
-import Data.Symbol (class IsSymbol, SProxy(..))
+import Data.Symbol (SProxy(..))
 import Data.Traversable (sequence, traverse)
 import Effect (Effect)
 import Effect.Aff (throwError)
@@ -59,9 +59,10 @@ getItem ::
   forall env a.
   HasSingleTableDb env =>
   ItemCodec a =>
+  Repo a ->
   PrimaryKey ->
   RIO env (Maybe a)
-getItem { pk, sk } = do
+getItem _ { pk, sk } = do
   table <- getTable
   res <- Cl.getItem
     { "Key": AVObject $ Object.fromHomogeneous
@@ -76,9 +77,10 @@ deleteItem ::
   forall env a.
   HasSingleTableDb env =>
   ItemCodec a =>
+  Repo a ->
   PrimaryKey ->
   RIO env (Maybe a)
-deleteItem { pk, sk } = do
+deleteItem _ { pk, sk } = do
   table <- getTable
   res <- Cl.deleteItem
     { "Key": AVObject $ Object.fromHomogeneous
@@ -111,10 +113,11 @@ insertItem ::
   HasSingleTableDb env =>
   ItemCodec a =>
   HasPath "pk" pk a =>
+  Repo a ->
   a ->
   (Maybe (Condition a)) ->
   RIO env (Maybe a)
-insertItem item conditionExprF = putItem { item, returnOld: false } finalKeyConditionF
+insertItem repo item conditionExprF = putItem repo { item, returnOld: false } finalKeyConditionF
   where
   finalKeyConditionF =
     (conditionExprF <#> cAnd CE.cItemNotExists) <|>
@@ -124,12 +127,13 @@ putItem ::
   forall env a.
   HasSingleTableDb env =>
   ItemCodec a =>
+  Repo a ->
   { item :: a
   , returnOld :: Boolean
   } ->
   (Maybe (Condition a)) ->
   RIO env (Maybe a)
-putItem { item, returnOld } condition = do
+putItem _ { item, returnOld } condition = do
   table <- getTable
   res <- Cl.putItem
     { "Item": writeItem item
@@ -161,13 +165,14 @@ updateExistingItem ::
   HasSingleTableDb env =>
   ItemCodec a =>
   HasPath "pk" pk a =>
+  Repo a ->
   UpdateReturnValues ->
   UE.Update a Unit ->
   (Maybe (Condition a)) ->
   PrimaryKey ->
   RIO env a
-updateExistingItem retVals updateF keyConditionF pk = do
-  updateItem retVals updateF finalKeyConditionF pk
+updateExistingItem repo retVals updateF keyConditionF pk = do
+  updateItem repo retVals updateF finalKeyConditionF pk
   >>= require "Item"
   where
   finalKeyConditionF =
@@ -175,26 +180,28 @@ updateExistingItem retVals updateF keyConditionF pk = do
       <|> pure CE.cItemExists
 
 createOrUpdateItem ::
-  forall env r.
+  forall env a.
   HasSingleTableDb env =>
-  ItemCodec r =>
+  ItemCodec a =>
+  Repo a ->
   UpdateReturnValues ->
-  UE.Update r Unit ->
-  (Maybe (Condition r)) ->
+  UE.Update a Unit ->
+  (Maybe (Condition a)) ->
   PrimaryKey ->
-  RIO env (Maybe r)
+  RIO env (Maybe a)
 createOrUpdateItem = updateItem
 
 updateItem ::
-  forall env r.
+  forall env a.
   HasSingleTableDb env =>
-  ItemCodec r =>
+  ItemCodec a =>
+  Repo a ->
   UpdateReturnValues ->
-  UE.Update r Unit ->
-  (Maybe (Condition r)) ->
+  UE.Update a Unit ->
+  (Maybe (Condition a)) ->
   PrimaryKey ->
-  RIO env (Maybe r)
-updateItem retVals updateF keyConditionF {pk, sk} = do
+  RIO env (Maybe a)
+updateItem _ retVals updateF keyConditionF {pk, sk} = do
   table <- getTable
   res <- Cl.updateItem (params table)
   traverse readItemOrErr (uorToMaybe res."Attributes")
@@ -220,7 +227,7 @@ updateItem retVals updateF keyConditionF {pk, sk} = do
         URAllOld -> retValU (stringLit :: _ "ALL_OLD")
       }
 
-    retValU :: forall a. Coercible a (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW") => a -> (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
+    retValU :: forall u. Coercible u (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW") => u -> (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
     retValU = coerce
 
 queryPrimaryBySkPrefix ::
@@ -368,100 +375,13 @@ query index { pk, skCondition, scanIndexForward } = do
 
 -- Repo
 
-type Repo a =
-  { getItem ::
-       forall env.
-       HasSingleTableDb env =>
-       PrimaryKey ->
-       RIO env (Maybe a)
-  , deleteItem ::
-       forall env.
-       HasSingleTableDb env =>
-       PrimaryKey ->
-       RIO env (Maybe a)
-  , putItem ::
-       forall env.
-       HasSingleTableDb env =>
-       { item :: a
-       , returnOld :: Boolean
-       } ->
-       (Maybe (Condition a)) ->
-       RIO env (Maybe a)
-  , insertItem ::
-       forall env pk.
-       HasSingleTableDb env =>
-       HasPath "pk" pk a =>
-       a ->
-       (Maybe (Condition a)) ->
-       RIO env (Maybe a)
-  , createOrUpdateItem ::
-      forall env.
-      HasSingleTableDb env =>
-      UpdateReturnValues ->
-      UE.Update a Unit ->
-      (Maybe (Condition a)) ->
-      PrimaryKey ->
-      RIO env (Maybe a)
-  , updateExistingItem ::
-      forall env pk.
-      HasSingleTableDb env =>
-      HasPath "pk" pk a =>
-      UpdateReturnValues ->
-      UE.Update a Unit ->
-      (Maybe (Condition a)) ->
-      PrimaryKey ->
-      RIO env a
-  , query ::
-      forall env index indexName pkName pkValue skName skValue _r skCond pkSkCond lastEvaluatedKeyR.
-      HasSingleTableDb env =>
-      IsIndex index indexName pkName skName =>
-      IndexValue pkValue =>
-      IndexValue skValue =>
-      IsSymbol pkName =>
-      HasPath pkName pkValue a =>
-      HasPath skName skValue a =>
-      Row.Cons pkName String skCond pkSkCond =>
-      Row.Cons skName String () skCond =>
-      Row.Union skCond _r pkSkCond =>
-      GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR =>
-      ItemCodec { | lastEvaluatedKeyR } =>
-      ItemCodec a =>
-      index ->
-      { pk :: String
-      , skCondition :: Condition {|skCond}
-      , scanIndexForward :: Boolean
-      } ->
-      RIO env { items :: Array a, lastEvaluatedKey :: Maybe { | lastEvaluatedKeyR } }
-  , txPutItem ::
-      a -> TransactWriteItemsOperationF
-  , txDeleteItem ::
-      PrimaryKey -> TransactWriteItemsOperationF
-  , txUpdateItem ::
-      PrimaryKey ->
-      UE.Update a Unit ->
-      (Maybe (Condition a)) -> TransactWriteItemsOperationF
-  , txConditionCheck ::
-      PrimaryKey ->
-      Condition a -> TransactWriteItemsOperationF
-  }
+data Repo a = Repo
 
 mkRepo ::
   forall a.
   ItemCodec a =>
   Repo a
-mkRepo =
-  { getItem: getItem
-  , deleteItem: deleteItem
-  , putItem: putItem
-  , insertItem: insertItem
-  , createOrUpdateItem
-  , updateExistingItem: updateExistingItem -- todo disallow updates of pk, sk
-  , query: query
-  , txPutItem: TWI.txPutItem
-  , txDeleteItem: TWI.txDeleteItem
-  , txUpdateItem: TWI.txUpdateItem
-  , txConditionCheck: TWI.txConditionCheck
-  }
+mkRepo = Repo
 
 -- Utils
 

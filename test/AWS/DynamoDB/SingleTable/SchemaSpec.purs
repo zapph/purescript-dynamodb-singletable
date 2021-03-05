@@ -1,9 +1,10 @@
 module AWS.DynamoDB.SingleTable.SchemaSpec
        where
 
-import AWS.DynamoDB.SingleTable.Schema (Repo, getItem, mkRepo, queryPrimaryBySkPrefix, queryPrimaryBySkPrefix')
+import AWS.DynamoDB.SingleTable (Repo, mkRepo)
 import AWS.DynamoDB.SingleTable.DynKeySegment (DynKeySegment, normalizedDynKeySegment)
 import AWS.DynamoDB.SingleTable.Key (Key, mkKey)
+import AWS.DynamoDB.SingleTable.Schema (getItem, queryPrimaryBySkPrefix, queryPrimaryBySkPrefix')
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
 import Data.Maybe (Maybe)
 import Data.Variant (Variant)
@@ -60,7 +61,7 @@ type Schema =
   , "orderItem" :: OrderItem
   )
 
-repo :: Repo Schema
+repo :: Repo (Variant Schema)
 repo = mkRepo
 
 getUserSample :: forall env. HasSingleTableDb env => RIO env (Maybe User)
