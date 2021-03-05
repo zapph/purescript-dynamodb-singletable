@@ -25,7 +25,7 @@ import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
-import AWS.DynamoDB.SingleTable.Index (class IndexValue, class IsSTDbIndex, indexName)
+import AWS.DynamoDB.SingleTable.Index (class IndexValue, class IsIndex, indexName)
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
 import AWS.DynamoDB.SingleTable.Types (class HasPath, class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, SingleTableDb(..), dbL)
@@ -319,12 +319,11 @@ instance getLastEvaluatedKeyRows ::
   ) => GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR
 
 query ::
-  forall env a index pkName pkValue skName skValue _r skCond pkSkCond lastEvaluatedKeyR.
+  forall env a index indexName pkName pkValue skName skValue _r skCond pkSkCond lastEvaluatedKeyR.
   HasSingleTableDb env =>
-  IsSTDbIndex index pkName skName =>
+  IsIndex index indexName pkName skName =>
   IndexValue pkValue =>
   IndexValue skValue =>
-  IsSymbol pkName =>
   HasPath pkName pkValue a =>
   HasPath skName skValue a =>
   Row.Cons pkName String skCond pkSkCond =>
@@ -413,9 +412,9 @@ type Repo a =
       PrimaryKey ->
       RIO env a
   , query ::
-      forall env index pkName pkValue skName skValue _r skCond pkSkCond lastEvaluatedKeyR.
+      forall env index indexName pkName pkValue skName skValue _r skCond pkSkCond lastEvaluatedKeyR.
       HasSingleTableDb env =>
-      IsSTDbIndex index pkName skName =>
+      IsIndex index indexName pkName skName =>
       IndexValue pkValue =>
       IndexValue skValue =>
       IsSymbol pkName =>

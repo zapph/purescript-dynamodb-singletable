@@ -1,6 +1,8 @@
 module AWS.DynamoDB.SingleTable.Index
-       ( class IsSTDbIndex
+       ( class IsIndex
        , indexName
+       , pkName
+       , skName
        , PrimaryIndex(..)
        , Gsi1(..)
        , Gsi2(..)
@@ -9,7 +11,9 @@ module AWS.DynamoDB.SingleTable.Index
        , class IndexValue
        ) where
 
-import Data.Maybe (Maybe(..))
+import AWS.DynamoDB.SingleTable.Internal.SymbolUtils (class IsSymbolMaybe, SMProxy(..), SymbolJust, SymbolNothing, reflectSymbolMaybe, kind SymbolMaybe)
+import Data.Maybe (Maybe)
+import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 
 data PrimaryIndex = PrimaryIndex
 data Gsi1 = Gsi1
@@ -17,23 +21,41 @@ data Gsi2 = Gsi2
 data Gsi3 = Gsi3
 data Gsi4 = Gsi4
 
-class IsSTDbIndex a (pkName :: Symbol) (skName :: Symbol) | a -> pkName skName where
-  indexName :: a -> Maybe String
+class
+  ( IsSymbolMaybe indexName
+  , IsSymbol pkName
+  , IsSymbol skName
+  ) <= IsIndex a (indexName :: SymbolMaybe) (pkName :: Symbol) (skName :: Symbol) | a -> indexName pkName skName
 
-instance isSTDbIndexPrimary :: IsSTDbIndex PrimaryIndex "pk" "sk" where
-  indexName _ = Nothing
+instance isIndexPrimary :: IsIndex PrimaryIndex SymbolNothing "pk" "sk"
+instance isIndexGsi1 :: IsIndex Gsi1 (SymbolJust "gsi1") "gsi1pk" "gsi1sk"
+instance isIndexGsi2 :: IsIndex Gsi2 (SymbolJust "gsi2") "gsi2pk" "gsi2sk"
+instance isIndexGsi3 :: IsIndex Gsi3 (SymbolJust "gsi3") "gsi3pk" "gsi3sk"
+instance isIndexGsi4 :: IsIndex Gsi4 (SymbolJust "gsi4") "gsi4pk" "gsi4sk"
 
-instance isSTDbIndexGsi1 :: IsSTDbIndex Gsi1 "gsi1pk" "gsi1sk" where
-  indexName _ = Just "gsi1"
+indexName ::
+  forall a indexName pkName skName.
+  IsIndex a indexName pkName skName =>
+  a ->
+  Maybe String
+indexName _ =
+  reflectSymbolMaybe (SMProxy :: _ indexName)
 
-instance isSTDbIndexGsi2 :: IsSTDbIndex Gsi2 "gsi2pk" "gsi2sk" where
-  indexName _ = Just "gsi2"
+pkName ::
+  forall a indexName pkName skName.
+  IsIndex a indexName pkName skName =>
+  a ->
+  String
+pkName _ =
+  reflectSymbol (SProxy :: _ pkName)
 
-instance isSTDbIndexGsi3 :: IsSTDbIndex Gsi3 "gsi3pk" "gsi3sk" where
-  indexName _ = Just "gsi3"
-
-instance isSTDbIndexGsi4 :: IsSTDbIndex Gsi4 "gsi4pk" "gsi4sk" where
-  indexName _ = Just "gsi4"
+skName ::
+  forall a indexName pkName skName.
+  IsIndex a indexName pkName skName =>
+  a ->
+  String
+skName _ =
+  reflectSymbol (SProxy :: _ skName)
 
 class IndexValue a
 instance indexValueString :: IndexValue String

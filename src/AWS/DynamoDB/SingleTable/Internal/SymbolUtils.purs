@@ -6,8 +6,16 @@ module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
        , class IsSymbolEq
        , class IsOrdEq
        , class SymbolEq
+       , kind SymbolMaybe
+       , SymbolNothing
+       , SymbolJust
+       , SMProxy(..)
+       , class IsSymbolMaybe
+       , reflectSymbolMaybe
        ) where
 
+import Data.Maybe (Maybe(..))
+import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Ordering (EQ, kind Ordering)
 import Prim.Symbol as Symbol
@@ -115,3 +123,21 @@ else instance isOrdEqNEq :: IsOrdEq o False
 class SymbolEq (s1 :: Symbol) (s2 :: Symbol)
 
 instance symbolEqI :: IsSymbolEq s1 s2 True => SymbolEq s1 s2
+
+foreign import kind SymbolMaybe
+foreign import data SymbolJust :: Symbol -> SymbolMaybe
+foreign import data SymbolNothing :: SymbolMaybe
+
+data SMProxy (m :: SymbolMaybe) = SMProxy
+
+class IsSymbolMaybe (m :: SymbolMaybe) where
+  reflectSymbolMaybe :: SMProxy m -> Maybe String
+
+instance isSymbolMaybeNothing ::
+  IsSymbolMaybe SymbolNothing where
+  reflectSymbolMaybe _ = Nothing
+
+instance isSymbolMaybeJust ::
+  IsSymbol s =>
+  IsSymbolMaybe (SymbolJust s) where
+  reflectSymbolMaybe _ = Just (reflectSymbol (SProxy :: _ s))
