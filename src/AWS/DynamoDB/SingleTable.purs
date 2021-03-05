@@ -6,14 +6,6 @@ module AWS.DynamoDB.SingleTable
        , putItem
        , updateItem
        , transactWriteItems
-       , class IsSTDbIndex
-       , indexName
-       , PrimaryIndex(..)
-       , Gsi1(..)
-       , Gsi2(..)
-       , Gsi3(..)
-       , Gsi4(..)
-       , class IndexValue
        , query
        , queryPrimaryBySkPrefix
        , queryGsi1BySkPrefix
@@ -33,6 +25,7 @@ import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
+import AWS.DynamoDB.SingleTable.Index (class IndexValue, class IsSTDbIndex, indexName)
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
 import AWS.DynamoDB.SingleTable.Types (class HasPath, class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, SingleTableDb(..), dbL)
@@ -314,35 +307,6 @@ queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } = do
         , ":skPrefix": avS skPrefix
         }
       }
-
-data PrimaryIndex = PrimaryIndex
-data Gsi1 = Gsi1
-data Gsi2 = Gsi2
-data Gsi3 = Gsi3
-data Gsi4 = Gsi4
-
-class IsSTDbIndex a (pkName :: Symbol) (skName :: Symbol) | a -> pkName skName where
-  indexName :: a -> Maybe String
-
-instance isSTDbIndexPrimary :: IsSTDbIndex PrimaryIndex "pk" "sk" where
-  indexName _ = Nothing
-
-instance isSTDbIndexGsi1 :: IsSTDbIndex Gsi1 "gsi1pk" "gsi1sk" where
-  indexName _ = Just "gsi1"
-
-instance isSTDbIndexGsi2 :: IsSTDbIndex Gsi2 "gsi2pk" "gsi2sk" where
-  indexName _ = Just "gsi2"
-
-instance isSTDbIndexGsi3 :: IsSTDbIndex Gsi3 "gsi3pk" "gsi3sk" where
-  indexName _ = Just "gsi3"
-
-instance isSTDbIndexGsi4 :: IsSTDbIndex Gsi4 "gsi4pk" "gsi4sk" where
-  indexName _ = Just "gsi4"
-
-class IndexValue a
-instance indexValueString :: IndexValue String
-instance indexValueMaybeString :: IndexValue (Maybe String)
-
 
 class GetLastEvaluatedKeyRows (pkName :: Symbol) (skName :: Symbol) (rows :: # Type) | pkName skName -> rows
 
