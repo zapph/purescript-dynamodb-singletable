@@ -1,24 +1,74 @@
 module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
-       ( class IsCharUpper
+       ( kind SymbolMaybe
+       , SMNothing
+       , SMJust
+       , SMProxy(..)
+       , class IsSymbolMaybe
+       , reflectSymbolMaybe
+       , kind SymbolList
+       , SLCons
+       , SLNil
+       , type (:+)
+       , SLProxy(..)
+       , class IsSymbolList
+       , reflectSymbolList
+       , class IsCharUpper
        , class IsWordAllUpper
        , class ChompCommonPrefix
        , class ChompCommonPrefixStep
        , class IsSymbolEq
        , class IsOrdEq
        , class SymbolEq
-       , kind SymbolMaybe
-       , SymbolNothing
-       , SymbolJust
-       , SMProxy(..)
-       , class IsSymbolMaybe
-       , reflectSymbolMaybe
        ) where
 
+import Data.List (List(..))
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Ordering (EQ, kind Ordering)
 import Prim.Symbol as Symbol
+
+
+foreign import kind SymbolMaybe
+foreign import data SMJust :: Symbol -> SymbolMaybe
+foreign import data SMNothing :: SymbolMaybe
+
+data SMProxy (m :: SymbolMaybe) = SMProxy
+
+class IsSymbolMaybe (m :: SymbolMaybe) where
+  reflectSymbolMaybe :: SMProxy m -> Maybe String
+
+instance isSymbolMaybeNothing ::
+  IsSymbolMaybe SMNothing where
+  reflectSymbolMaybe _ = Nothing
+
+instance isSymbolMaybeJust ::
+  IsSymbol s =>
+  IsSymbolMaybe (SMJust s) where
+  reflectSymbolMaybe _ = Just (reflectSymbol (SProxy :: _ s))
+
+foreign import kind SymbolList
+foreign import data SLNil :: SymbolList
+foreign import data SLCons :: Symbol -> SymbolList -> SymbolList
+
+infixr 4 type SLCons as :+
+
+data SLProxy (m :: SymbolList) = SLProxy
+
+class IsSymbolList (l :: SymbolList) where
+  reflectSymbolList :: SLProxy l -> List String
+
+instance isSymbolListNothing ::
+  IsSymbolList SLNil where
+  reflectSymbolList _ = Nil
+
+instance isSymbolListJust ::
+  ( IsSymbol h
+  , IsSymbolList tl
+  ) =>
+  IsSymbolList (SLCons h tl) where
+  reflectSymbolList _ = Cons (reflectSymbol (SProxy :: _ h)) (reflectSymbolList (SLProxy :: _ tl))
+
 
 class IsCharUpper (c :: Symbol)
 
@@ -58,12 +108,6 @@ else instance isWordAllUpperCons ::
   , IsWordAllUpper t
   ) => IsWordAllUpper s
 
-foreign import kind SymbolList
-foreign import data SLNil :: SymbolList
-foreign import data SLCons :: Symbol -> SymbolList -> SymbolList
-
-infixr 4 type SLCons as :+
-
 class SymbolSplitWithChar (sep :: Symbol) (s :: Symbol) (r :: SymbolList) | sep s -> r
 
 instance symbolSplitWithCharI :: SymbolSplitWithChar' sep s "" r => SymbolSplitWithChar sep s r
@@ -87,8 +131,6 @@ else instance symbolSplitAccNoMatch ::
   ( Symbol.Append acc h acc'
   , SymbolSplitWithChar' sep tl acc' tlR
   ) => SymbolSplitAcc ord sep h tl acc tlR
-
-data SLProxy (slist :: SymbolList) = SLProxy
 
 class ChompCommonPrefix (s1 :: Symbol) (s2 :: Symbol) (r1 :: Symbol) (r2 :: Symbol) | s1 s2 -> r1 r2
 
@@ -123,21 +165,3 @@ else instance isOrdEqNEq :: IsOrdEq o False
 class SymbolEq (s1 :: Symbol) (s2 :: Symbol)
 
 instance symbolEqI :: IsSymbolEq s1 s2 True => SymbolEq s1 s2
-
-foreign import kind SymbolMaybe
-foreign import data SymbolJust :: Symbol -> SymbolMaybe
-foreign import data SymbolNothing :: SymbolMaybe
-
-data SMProxy (m :: SymbolMaybe) = SMProxy
-
-class IsSymbolMaybe (m :: SymbolMaybe) where
-  reflectSymbolMaybe :: SMProxy m -> Maybe String
-
-instance isSymbolMaybeNothing ::
-  IsSymbolMaybe SymbolNothing where
-  reflectSymbolMaybe _ = Nothing
-
-instance isSymbolMaybeJust ::
-  IsSymbol s =>
-  IsSymbolMaybe (SymbolJust s) where
-  reflectSymbolMaybe _ = Just (reflectSymbol (SProxy :: _ s))

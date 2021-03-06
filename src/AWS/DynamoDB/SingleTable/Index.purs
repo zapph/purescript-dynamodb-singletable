@@ -11,7 +11,7 @@ module AWS.DynamoDB.SingleTable.Index
        , class IndexValue
        ) where
 
-import AWS.DynamoDB.SingleTable.Internal.SymbolUtils (class IsSymbolMaybe, SMProxy(..), SymbolJust, SymbolNothing, reflectSymbolMaybe, kind SymbolMaybe)
+import AWS.DynamoDB.SingleTable.Internal.SymbolUtils (class IsSymbolMaybe, SMJust, SMNothing, SMProxy(..), reflectSymbolMaybe, kind SymbolMaybe)
 import Data.Maybe (Maybe)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 
@@ -27,11 +27,11 @@ class
   , IsSymbol skName
   ) <= IsIndex a (indexName :: SymbolMaybe) (pkName :: Symbol) (skName :: Symbol) | a -> indexName pkName skName
 
-instance isIndexPrimary :: IsIndex PrimaryIndex SymbolNothing "pk" "sk"
-instance isIndexGsi1 :: IsIndex Gsi1 (SymbolJust "gsi1") "gsi1pk" "gsi1sk"
-instance isIndexGsi2 :: IsIndex Gsi2 (SymbolJust "gsi2") "gsi2pk" "gsi2sk"
-instance isIndexGsi3 :: IsIndex Gsi3 (SymbolJust "gsi3") "gsi3pk" "gsi3sk"
-instance isIndexGsi4 :: IsIndex Gsi4 (SymbolJust "gsi4") "gsi4pk" "gsi4sk"
+instance isIndexPrimary :: IsIndex PrimaryIndex SMNothing "pk" "sk"
+instance isIndexGsi1 :: IsIndex Gsi1 (SMJust "gsi1") "gsi1pk" "gsi1sk"
+instance isIndexGsi2 :: IsIndex Gsi2 (SMJust "gsi2") "gsi2pk" "gsi2sk"
+instance isIndexGsi3 :: IsIndex Gsi3 (SMJust "gsi3") "gsi3pk" "gsi3sk"
+instance isIndexGsi4 :: IsIndex Gsi4 (SMJust "gsi4") "gsi4pk" "gsi4sk"
 
 indexName ::
   forall a indexName pkName skName.
