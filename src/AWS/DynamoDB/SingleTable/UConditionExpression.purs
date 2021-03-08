@@ -1,39 +1,16 @@
 module AWS.DynamoDB.SingleTable.UConditionExpression
-       ( Condition
-       , Path
-       , spToPath
-       , pathToString
-       , Operand
-       , cEq
-       , cNEq
-       , cLt
-       , cLtEq
-       , cGt
-       , cGtEq
-       , cBetween
-       , cIn
-       , cAnd
-       , cOr
-       , cNot
-       , cAttributeExists
-       , cAttributeNotExists
-       , cItemExists
-       , cItemNotExists
-       , cBeginsWith
-       , cContains
-       , opPath
-       , opValue
-       , buildParams
-       ) where
+       where
 
 import Prelude
 
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, avS, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CB
+import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue, class ToValueList1, toValue, toValueList1)
+import AWS.DynamoDB.SingleTable.Path (Path, pathToString)
 import AWS.DynamoDB.SingleTable.Types (AttributeValue)
-import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Foldable (intercalate)
+import Data.List.NonEmpty (NonEmptyList)
 import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Traversable (traverse)
 import Type.Data.Symbol (reflectSymbol)
@@ -43,27 +20,19 @@ import Type.Data.Symbol (reflectSymbol)
 data Condition =
   CComp Operand Comparator Operand
   | CBetween Operand { min :: Operand, max :: Operand }
-  | CIn Operand (NonEmptyArray Operand)
+  | CIn Operand (NonEmptyList Operand)
   | CAnd Condition Condition
   | COr Condition Condition
   | CNot Condition
     -- funcs
   | CAttributeExists Path
   | CAttributeNotExists Path
---  | CAttributeType Path Typ
+--  | CAttributeType String Typ
   | CBeginsWith Path String
   | CContains Path Operand
 
-newtype Path = Path String
-
-spToPath :: forall s. IsSymbol s => SProxy s -> Path
-spToPath = Path <<< reflectSymbol
-
-pathToString :: Path -> String
-pathToString (Path s) = s
-
 data Operand =
-  OPath Path
+  OPath String
   | OValue AttributeValue
 
 data Comparator =
@@ -74,105 +43,126 @@ data Comparator =
   | CompGt
   | CompGtEq
 
-data Typ =
-  TypS
-  | TypSS
-  | TypN
-  | TypNS
+-- can this be solved using Generic?
 
-cEq :: Operand -> Operand -> Condition
-cEq = ccomp CompEq
+-- Condition
+data CComp' l comp r = CComp' l comp r
+instance toValueCComp' ::
+  ( ToValue l Operand
+  , ToValue comp Comparator
+  , ToValue r Operand
+  ) => ToValue (CComp' l comp r) Condition where
+  toValue (CComp' l comp r) = CComp (toValue l) (toValue comp) (toValue r)
 
-cNEq :: Operand -> Operand -> Condition
-cNEq = ccomp CompNEq
+data CBetween' op min max = CBetween' op min max
+instance toValueCBetween' ::
+  ( ToValue op Operand
+  , ToValue min Operand
+  , ToValue max Operand
+  ) => ToValue (CBetween' op min max) Condition where
+  toValue (CBetween' op min max) =
+    CBetween (toValue op) { min: toValue min, max: toValue max }
 
-cLt :: Operand -> Operand -> Condition
-cLt = ccomp CompLt
+data CIn' op opts = CIn' op opts
+instance toValueCIn' ::
+  ( ToValue op Operand
+  , ToValueList1 opts Operand
+  ) => ToValue (CIn' op opts) Condition where
+  toValue (CIn' op opts) =
+    CIn (toValue op) (toValueList1 opts)
 
-cLtEq :: Operand -> Operand -> Condition
-cLtEq = ccomp CompLtEq
+data CAnd' l r = CAnd' l r
+instance toValueCAnd' ::
+  ( ToValue l Condition
+  , ToValue r Condition
+  ) => ToValue (CAnd' l r) Condition where
+  toValue (CAnd' l r) =
+    CAnd (toValue l) (toValue r)
 
-cGt :: Operand -> Operand -> Condition
-cGt = ccomp CompGt
+data COr' l r = COr' l r
+instance toValueCOr' ::
+  ( ToValue l Condition
+  , ToValue r Condition
+  ) => ToValue (COr' l r) Condition where
+  toValue (COr' l r) =
+    COr (toValue l) (toValue r)
 
-cGtEq :: Operand -> Operand -> Condition
-cGtEq = ccomp CompGtEq
+data CNot' cond = CNot' cond
+instance toValueCNot' ::
+  ToValue cond Condition =>
+  ToValue (CNot' cond) Condition where
+  toValue (CNot' cond) =
+    CNot (toValue cond)
 
-ccomp :: Comparator -> Operand -> Operand -> Condition
-ccomp comp l r = CComp l comp r
+data CAttributeExists' p = CAttributeExists' p
+instance toValueCAttributeExists' ::
+  ToValue p Path =>
+  ToValue (CAttributeExists' p) Condition where
+  toValue (CAttributeExists' p) =
+    CAttributeExists (toValue p)
 
-cBetween :: Operand -> { min :: Operand, max :: Operand } -> Condition
-cBetween = CBetween
+data CAttributeNotExists' p = CAttributeNotExists' p
+instance toValueCAttributeNotExists' ::
+  ToValue p Path =>
+  ToValue (CAttributeNotExists' p) Condition where
 
-cIn :: Operand -> NonEmptyArray Operand -> Condition
-cIn a opts = CIn a opts
+  toValue (CAttributeNotExists' p) =
+    CAttributeNotExists (toValue p)
 
-cAnd :: Condition -> Condition -> Condition
-cAnd = CAnd
+-- | CAttributeType Path Typ = Path Typ
+data CBeginsWith' p pfx = CBeginsWith' p pfx
 
-cOr :: Condition -> Condition -> Condition
-cOr = COr
+instance toValueCBeginsWith' ::
+  ( ToValue p Path
+  , ToValue pfx String
+  ) =>
+  ToValue (CBeginsWith' p pfx) Condition where
+  toValue (CBeginsWith' p pfx) =
+    CBeginsWith (toValue p) (toValue pfx)
 
-cNot :: Condition -> Condition
-cNot = CNot
+data CContains' s op = CContains' s op
 
-cAttributeExists ::
-  forall k.
-  IsSymbol k =>
-  SProxy k ->
-  Condition
-cAttributeExists sp =
-  CAttributeExists (spToPath sp)
+instance toValueCContains' ::
+  ( ToValue s Path
+  , ToValue op Operand
+  ) => ToValue (CContains' s op) Condition where
+  toValue (CContains' s op) =
+    CContains (toValue s) (toValue op)
 
-cAttributeNotExists ::
-  forall k.
-  IsSymbol k =>
-  SProxy k ->
-  Condition
-cAttributeNotExists sp =
-  CAttributeNotExists (spToPath sp)
+-- Operand
+data OPath' (s :: Symbol) = OPath'
 
-cItemExists ::
-  Condition
-cItemExists =
-  cAttributeExists (SProxy :: _ "pk")
+instance toValueOPath' :: IsSymbol s => ToValue (OPath' s) Operand where
+  toValue _ = OPath (reflectSymbol (SProxy :: _ s))
 
-cItemNotExists ::
-  Condition
-cItemNotExists =
-  cAttributeNotExists (SProxy :: _ "pk")
+data OValue' v = OValue' v
+instance toValueOValue' :: AVCodec v => ToValue (OValue' v) Operand where
+  toValue (OValue' v) = OValue (writeAV v)
 
-cBeginsWith ::
-  forall k.
-  IsSymbol k =>
-  SProxy k ->
-  String ->
-  Condition
-cBeginsWith sp substring =
-  CBeginsWith (spToPath sp) substring
+-- Comparator
+data CompEq' = CompEq'
+instance toValuelCompEq :: ToValue CompEq' Comparator where
+  toValue _ = CompEq
 
-cContains ::
-  forall k.
-  IsSymbol k =>
-  SProxy k ->
-  Operand ->
-  Condition
-cContains sp =
-  CContains (spToPath sp)
+data CompNEq' = CompNEq'
+instance toValueCompNEq' :: ToValue CompNEq' Comparator where
+  toValue _ = CompNEq
 
-opPath ::
-  forall path.
-  IsSymbol path =>
-  SProxy path ->
-  Operand
-opPath = OPath <<< spToPath
+data CompLt' = CompLt'
+instance toValueCompLt' :: ToValue CompLt' Comparator where
+  toValue _ = CompLt
 
-opValue ::
-  forall v.
-  AVCodec v =>
-  v ->
-  Operand
-opValue = OValue <<< writeAV
+data CompLtEq' = CompLtEq'
+instance toValueCompLtEq' :: ToValue CompLtEq' Comparator where
+  toValue _ = CompLtEq
+
+data CompGt' = CompGt'
+instance toValueCompGt' :: ToValue CompGt' Comparator where
+  toValue _ = CompGt
+
+data CompGtEq' = CompGtEq'
+instance toValueCompGtEq' :: ToValue CompGtEq' Comparator where
+  toValue _ = CompGtEq
 
 buildParams ::
   Condition ->
@@ -219,7 +209,7 @@ buildParams (CContains c a) = ado
 buildOp ::
   Operand ->
   CommandBuilder String
-buildOp (OPath p) = CB.addName (pathToString p)
+buildOp (OPath p) = CB.addName p
 buildOp (OValue v) = CB.addValue v
 
 -- utils
