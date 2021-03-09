@@ -7,12 +7,6 @@ module AWS.DynamoDB.SingleTable
        , updateItem
        , transactWriteItems
        , query
-       , query2
-       , queryPrimaryBySkPrefix
-       , queryGsi1BySkPrefix
-       , queryGsi2BySkPrefix
-       , queryGsi3BySkPrefix
-       , queryGsiNBySkPrefix
        , Repo
        , mkRepo
        , module E
@@ -23,9 +17,9 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, readItem, writeItem)
 import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
-import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
+import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
-import AWS.DynamoDB.SingleTable.Index (class IndexValue, class IsIndex, indexName)
+import AWS.DynamoDB.SingleTable.Index (class IsIndex, indexName)
 import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
 import AWS.DynamoDB.SingleTable.QueryFilter (class QueryFilter)
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
@@ -39,7 +33,6 @@ import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
 import Data.Lens (view)
 import Data.Maybe (Maybe(..))
-import Data.Symbol (SProxy(..))
 import Data.Traversable (sequence, traverse)
 import Effect (Effect)
 import Effect.Aff (throwError)
@@ -47,7 +40,6 @@ import Effect.Exception (Error, error)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Literals (StringLit, stringLit)
-import Prim.Row as Row
 import RIO (RIO)
 import Untagged.Coercible (class Coercible, coerce)
 import Untagged.Union (type (|+|), maybeToUor, uorToMaybe)
@@ -233,138 +225,7 @@ updateItem _ retVals updateF keyConditionF {pk, sk} = do
     retValU :: forall u. Coercible u (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW") => u -> (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
     retValU = coerce
 
-queryPrimaryBySkPrefix ::
-  forall env a.
-  HasSingleTableDb env =>
-  ItemCodec a =>
-  { pk :: String, skPrefix :: String } ->
-  RIO env (Array a)
-queryPrimaryBySkPrefix =
-  queryBySkPrefix
-  { pkPath: "pk"
-  , skPath: "sk"
-  , indexName: Nothing
-  }
-
-queryGsi1BySkPrefix ::
-  forall env a.
-  HasSingleTableDb env =>
-  ItemCodec a =>
-  { pk :: String, skPrefix :: String } ->
-  RIO env (Array a)
-queryGsi1BySkPrefix =
-  queryGsiNBySkPrefix 1
-
-queryGsi2BySkPrefix ::
-  forall env a.
-  HasSingleTableDb env =>
-  ItemCodec a =>
-  { pk :: String, skPrefix :: String } ->
-  RIO env (Array a)
-queryGsi2BySkPrefix =
-  queryGsiNBySkPrefix 2
-
-queryGsi3BySkPrefix ::
-  forall env a.
-  HasSingleTableDb env =>
-  ItemCodec a =>
-  { pk :: String, skPrefix :: String } ->
-  RIO env (Array a)
-queryGsi3BySkPrefix =
-  queryGsiNBySkPrefix 3
-
-queryGsiNBySkPrefix ::
-  forall env a.
-  HasSingleTableDb env =>
-  ItemCodec a =>
-  Int ->
-  { pk :: String, skPrefix :: String } ->
-  RIO env (Array a)
-queryGsiNBySkPrefix n =
-  queryBySkPrefix
-  { pkPath: "gsi" <> n' <> "pk"
-  , skPath: "gsi" <> n' <> "sk"
-  , indexName: Just $ "gsi" <> n'
-  }
-  where
-    n' = show n
-
-queryBySkPrefix ::
-  forall env a.
-  HasSingleTableDb env =>
-  ItemCodec a =>
-  { pkPath :: String, skPath :: String, indexName :: Maybe String } ->
-  { pk :: String, skPrefix :: String } ->
-  RIO env (Array a)
-queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } = do
-  table <- getTable
-  queryRawItems table >>= traverse readItemOrErr
-
-  where
-    queryRawItems table =
-      _."Items" <$> Cl.query (params table)
-
-    params table =
-      { "TableName": table
-      , "IndexName": maybeToUor indexName
-      , "KeyConditionExpression": "#pk = :pk and begins_with(#sk, :skPrefix)"
-      , "ExpressionAttributeNames": Object.fromHomogeneous
-        { "#pk": pkPath
-        , "#sk": skPath
-        }
-      , "ExpressionAttributeValues": Object.fromHomogeneous
-        { ":pk": avS pk
-        , ":skPrefix": avS skPrefix
-        }
-      }
-
 query ::
-  forall env a index indexName pkName pkValue skName skValue _r skCond pkSkCond.
-  HasSingleTableDb env =>
-  IsIndex index indexName pkName skName =>
-  IndexValue pkValue =>
-  IndexValue skValue =>
-  HasPath pkName pkValue a =>
-  HasPath skName skValue a =>
-  Row.Cons pkName String skCond pkSkCond =>
-  Row.Cons skName String () skCond =>
-  Row.Union skCond _r pkSkCond =>
-  ItemCodec a =>
-  index ->
-  { pk :: String
-  , skCondition :: Condition {|skCond}
-  , scanIndexForward :: Boolean
-  } ->
-  RIO env { items :: Array a, lastEvaluatedKey :: Maybe (LastEvaluatedKey index) }
-query index { pk, skCondition, scanIndexForward } = do
-  table <- getTable
-  res <- Cl.query (params table)
-  items <- traverse readItemOrErr res."Items"
-  pure
-    { items
-    , lastEvaluatedKey:
-      LastEvaluatedKey <$> uorToMaybe res."LastEvaluatedKey"
-    }
-
-  where
-    pkCondition :: Condition {|pkSkCond}
-    pkCondition = CE.opPath (SProxy :: _ pkName) `cEq` CE.opValue pk
-
-    pkSkCondition = pkCondition `cAnd` (CE.expandCondition skCondition)
-
-    { value: expr, attributeNames, attributeValues } =
-      CmdB.build $ CE.buildParams pkSkCondition
-
-    params table =
-      { "TableName": table
-      , "IndexName": maybeToUor (indexName index)
-      , "KeyConditionExpression": expr
-      , "ExpressionAttributeNames": maybeToUor attributeNames
-      , "ExpressionAttributeValues": maybeToUor attributeValues
-      , "ScanIndexForward": scanIndexForward
-      }
-
-query2 ::
   forall env index indexName a b pkName skName c.
   HasSingleTableDb env =>
   IsIndex index indexName pkName skName =>
@@ -377,7 +238,7 @@ query2 ::
   , scanIndexForward :: Boolean
   } ->
   RIO env { items :: Array b, lastEvaluatedKey :: Maybe (LastEvaluatedKey index) }
-query2 _ index { condition, scanIndexForward } = do
+query _ index { condition, scanIndexForward } = do
   table <- getTable
   res <- Cl.query (params table)
   items <- traverse readItemOrErr res."Items"

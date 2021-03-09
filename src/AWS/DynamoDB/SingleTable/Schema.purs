@@ -92,7 +92,7 @@ queryPrimaryBySkPrefix' ::
   { pk :: Key pkName, skPrefix :: Key prefix } ->
   RIO env (Array (Variant opts))
 queryPrimaryBySkPrefix' repo { pk, skPrefix } =
-  _.items <$> S.query2
+  _.items <$> S.query
     repo
     PrimaryIndex
     { condition
