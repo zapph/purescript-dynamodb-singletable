@@ -2,11 +2,8 @@ module AWS.DynamoDB.SingleTable.Schema
        ( GetItem
        , getItem'
        , getItem
-       , QueryPrimaryBySkPrefix
        , queryPrimaryBySkPrefix'
        , queryPrimaryBySkPrefix
-       , class CanSkPrefix
-       , class StripKCPrefix
        ) where
 
 import Prelude
@@ -17,18 +14,15 @@ import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec)
 import AWS.DynamoDB.SingleTable.Index (PrimaryIndex(..))
 import AWS.DynamoDB.SingleTable.Internal (class Filter, class FilterRows, class IsSubset, class On1, on1)
 import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
-import AWS.DynamoDB.SingleTable.Key (class ToKeySegmentList, type (:#:), KC, KD, KNil, Key, printKey, kind KeySegmentList)
+import AWS.DynamoDB.SingleTable.Key (Key, printKey)
 import AWS.DynamoDB.SingleTable.Path (Path'(..))
 import AWS.DynamoDB.SingleTable.QueryFilter (class QueryFilter)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
 import AWS.DynamoDB.SingleTable.UConditionExpression (CAnd'(..), CBeginsWith'(..), CComp'(..), CompEq'(..), Condition, OPath'(..), OValue'(..))
-import AWS.DynamoDB.SingleTable.Utils.SymbolUtils (class ChompCommonPrefix, class IsSymbolEq)
 import Data.Maybe (Maybe)
 import Data.Variant (Variant)
-import Prim.Boolean (False, True, kind Boolean)
-import Prim.Row as Row
+import Prim.Boolean (False)
 import RIO (RIO)
-import Type.Data.Boolean (class And)
 
 data GetItem pk sk
 
@@ -63,34 +57,23 @@ getItem ::
 getItem repo keyPair =
   map (on1 :: Variant opts -> v) <$> getItem' repo keyPair
 
-data QueryPrimaryBySkPrefix pk (prefix :: KeySegmentList)
-
-instance queryPrimaryBySkPrefixFilterRecord ::
-  ( Row.Cons "pk" pk _r1 r
-  , Row.Cons "sk" (Key sks) _r2 r
-  , ToKeySegmentList sks skl
-  , CanSkPrefix skl prefix canSkPrefix
-  ) => Filter (QueryPrimaryBySkPrefix pk prefix) {|r} canSkPrefix
-else instance queryPrimaryBySkPrefixFilterNonRecord ::
-  Filter (QueryPrimaryBySkPrefix pk prefix) a False
-
 queryPrimaryBySkPrefix' ::
-  forall env s pkName prefix opts.
+  forall env pkName prefix a b.
   HasSingleTableDb env =>
   QueryFilter "pk" "sk"
   (CAnd'
    (CComp' (OPath' (Path' "pk")) CompEq' (OValue' (Key pkName)))
    (CBeginsWith' (Path' "sk") (Key prefix))
-  ) (Variant s) (Variant opts) =>
+  ) a b =>
   ToValue
   (CAnd'
    (CComp' (OPath' (Path' "pk")) CompEq' (OValue' (Key pkName)))
    (CBeginsWith' (Path' "sk") (Key prefix))
   ) Condition =>
-  ItemCodec (Variant opts) =>
-  Repo (Variant s) ->
+  ItemCodec b =>
+  Repo a ->
   { pk :: Key pkName, skPrefix :: Key prefix } ->
-  RIO env (Array (Variant opts))
+  RIO env (Array b)
 queryPrimaryBySkPrefix' repo { pk, skPrefix } =
   _.items <$> S.query
     repo
@@ -105,30 +88,6 @@ queryPrimaryBySkPrefix' repo { pk, skPrefix } =
        (CComp' (OPath' (Path' :: _ "pk")) CompEq' (OValue' pk))
        (CBeginsWith' (Path' :: _ "sk") skPrefix)
       )
-
-class CanSkPrefix (skl :: KeySegmentList) (prefix :: KeySegmentList) (canPrefix :: Boolean) | skl prefix -> canPrefix
-
-instance canSkPrefixNilP :: CanSkPrefix skl KNil True
-else instance canSkPrefixNilS :: CanSkPrefix KNil p False
-else instance canSkPrefixCons ::
-    ( ChompCommonPrefix name1 name2 r1 r2
-    , IsSymbolEq r2 "" chompedPrefix
-    , StripKCPrefix r1 sklTl sklTl'
-    , CanSkPrefix sklTl' prefixTl canSkPrefixRest
-    , And chompedPrefix canSkPrefixRest isPrefix
-    ) =>
-    CanSkPrefix (KC name1 :#: sklTl) (KC name2 :#: prefixTl) isPrefix
-else instance canSkPrefixDynR ::
-    CanSkPrefix sklTl prefixTl r =>
-    CanSkPrefix (seg :#: sklTl) (KD name' t :#: prefixTl) r
-else instance canSkPrefixDynL ::
-    CanSkPrefix sklTl prefixTl r =>
-    CanSkPrefix (KD name t :#: sklTl) (seg :#: prefixTl) r
-
-class StripKCPrefix (rest :: Symbol) (tl :: KeySegmentList) (o :: KeySegmentList) | rest tl -> o
-
-instance stripKCPrefixEmpty :: StripKCPrefix "" tl tl
-else instance stripKCPrefixNonEmpty :: StripKCPrefix c tl (KC c :#: tl)
 
 queryPrimaryBySkPrefix ::
   forall env s pkName prefix v opts.
