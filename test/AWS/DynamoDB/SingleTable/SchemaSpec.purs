@@ -1,11 +1,16 @@
 module AWS.DynamoDB.SingleTable.SchemaSpec
        where
 
-import AWS.DynamoDB.SingleTable (Repo, mkRepo)
+import Prelude
+
+import AWS.DynamoDB.SingleTable (Repo, mkRepo, query)
 import AWS.DynamoDB.SingleTable.DynKeySegment (DynKeySegment, normalizedDynKeySegment)
+import AWS.DynamoDB.SingleTable.Index (PrimaryIndex(..))
 import AWS.DynamoDB.SingleTable.Key (Key, mkKey)
-import AWS.DynamoDB.SingleTable.Schema (getItem, queryPrimaryBySkPrefix, queryPrimaryBySkPrefix')
+import AWS.DynamoDB.SingleTable.Path (Path'(..))
+import AWS.DynamoDB.SingleTable.Schema (getItem, queryPrimaryBySkPrefix)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
+import AWS.DynamoDB.SingleTable.UConditionExpression (CAnd'(..), CBeginsWith'(..), CComp'(..), CompEq'(..), OPath'(..), OValue'(..))
 import Data.Maybe (Maybe)
 import Data.Variant (Variant)
 import RIO (RIO)
@@ -80,16 +85,22 @@ getOrderSample =
 
 queryUserWithOrderAndItemsSample :: forall env. HasSingleTableDb env => RIO env (Array (Variant (user :: User, order :: Order, orderItem :: OrderItem)))
 queryUserWithOrderAndItemsSample =
-  queryPrimaryBySkPrefix' repo
-    { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
-    , skPrefix: blankSk
+  _.items <$> query repo PrimaryIndex
+    { condition: beginsWithCond
+      { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+      , skPrefix: blankSk
+      }
+    , scanIndexForward: false
     }
 
 queryOrderWithItemsSample :: forall env. HasSingleTableDb env => RIO env (Array (Variant (order :: Order, orderItem :: OrderItem)))
 queryOrderWithItemsSample =
-  queryPrimaryBySkPrefix' repo
-    { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
-    , skPrefix: mkOrderSk { orderId: normalizedDynKeySegment "1234" }
+  _.items <$> query repo PrimaryIndex
+    { condition: beginsWithCond
+      { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+      , skPrefix: mkOrderSk { orderId: normalizedDynKeySegment "1234" }
+      }
+    , scanIndexForward: false
     }
 
 queryOrderItemsSample :: forall env. HasSingleTableDb env => RIO env (Array OrderItem)
@@ -100,3 +111,14 @@ queryOrderItemsSample =
                               , orderNum: normalizedDynKeySegment "0001"
                               }
     }
+
+beginsWithCond :: forall pk skPrefix.
+  { pk :: pk
+  , skPrefix :: skPrefix
+  }
+  -> CAnd' (CComp' (OPath' (Path' "pk")) CompEq' (OValue' pk)) (CBeginsWith' (Path' "sk") skPrefix)
+beginsWithCond { pk, skPrefix } =
+  (CAnd'
+   (CComp' (OPath' (Path' :: _ "pk")) CompEq' (OValue' pk))
+   (CBeginsWith' (Path' :: _ "sk") skPrefix)
+  )
