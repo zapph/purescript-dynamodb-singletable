@@ -11,6 +11,7 @@ module AWS.DynamoDB.SingleTable.Types
        , class HasPath
        , spToPath
        , pathToString
+       , LastEvaluatedKey(..)
        , TransactWriteItemsOperation
        ) where
 
@@ -66,6 +67,8 @@ class HasPath (k :: Symbol) v a | k a -> v
 instance hasPathRecord ::
   Row.Cons k v _r r =>
   HasPath k v {|r}
+
+newtype LastEvaluatedKey index = LastEvaluatedKey AttributeValue
 
 -- TODO add haspath for variant
 

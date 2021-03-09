@@ -13,7 +13,6 @@ module AWS.DynamoDB.SingleTable
        , queryGsi2BySkPrefix
        , queryGsi3BySkPrefix
        , queryGsiNBySkPrefix
-       , class GetLastEvaluatedKeyRows
        , Repo
        , mkRepo
        , module E
@@ -31,8 +30,8 @@ import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
 import AWS.DynamoDB.SingleTable.QueryFilter (class QueryFilter)
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
-import AWS.DynamoDB.SingleTable.Types (class HasPath, class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, SingleTableDb(..), dbL)
-import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, dbL) as E
+import AWS.DynamoDB.SingleTable.Types (class HasPath, class HasSingleTableDb, AVObject(..), AttributeValue, LastEvaluatedKey(..), PrimaryKey, SingleTableDb(..), dbL)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, LastEvaluatedKey, PrimaryKey, dbL) as E
 import AWS.DynamoDB.SingleTable.UConditionExpression as U
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Alt ((<|>))
@@ -319,18 +318,8 @@ queryBySkPrefix { pkPath, skPath, indexName } { pk, skPrefix } = do
         }
       }
 
-class GetLastEvaluatedKeyRows (pkName :: Symbol) (skName :: Symbol) (rows :: # Type) | pkName skName -> rows
-
--- | This is for lastEvaluatedKey, since we know dynamodb returns { pk :: String, sk :: String } always
--- | but returns additional secondary index primary key if you query against a secondary index { pk :: string, sk :: string , gsi1pk :: string, gsi1sk :: string }
-instance getLastEvaluatedKeyRows ::
-  ( Row.Cons pkName String ( pk :: String, sk :: String | withSkRow ) lekR
-  , Row.Cons skName String () withSkRow
-  , Row.Nub lekR lastEvaluatedKeyR
-  ) => GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR
-
 query ::
-  forall env a index indexName pkName pkValue skName skValue _r skCond pkSkCond lastEvaluatedKeyR.
+  forall env a index indexName pkName pkValue skName skValue _r skCond pkSkCond.
   HasSingleTableDb env =>
   IsIndex index indexName pkName skName =>
   IndexValue pkValue =>
@@ -340,23 +329,21 @@ query ::
   Row.Cons pkName String skCond pkSkCond =>
   Row.Cons skName String () skCond =>
   Row.Union skCond _r pkSkCond =>
-  GetLastEvaluatedKeyRows pkName skName lastEvaluatedKeyR =>
-  ItemCodec { | lastEvaluatedKeyR } =>
   ItemCodec a =>
   index ->
   { pk :: String
   , skCondition :: Condition {|skCond}
   , scanIndexForward :: Boolean
   } ->
-  RIO env { items :: Array a, lastEvaluatedKey :: Maybe { | lastEvaluatedKeyR } }
+  RIO env { items :: Array a, lastEvaluatedKey :: Maybe (LastEvaluatedKey index) }
 query index { pk, skCondition, scanIndexForward } = do
   table <- getTable
   res <- Cl.query (params table)
   items <- traverse readItemOrErr res."Items"
-  lastEvaluatedKey <- traverse readItemOrErrAVObject (uorToMaybe res."LastEvaluatedKey")
   pure
     { items
-    , lastEvaluatedKey
+    , lastEvaluatedKey:
+      LastEvaluatedKey <$> uorToMaybe res."LastEvaluatedKey"
     }
 
   where
@@ -389,13 +376,15 @@ query2 ::
   { condition :: c
   , scanIndexForward :: Boolean
   } ->
-  RIO env { items :: Array b }
+  RIO env { items :: Array b, lastEvaluatedKey :: Maybe (LastEvaluatedKey index) }
 query2 _ index { condition, scanIndexForward } = do
   table <- getTable
   res <- Cl.query (params table)
   items <- traverse readItemOrErr res."Items"
   pure
     { items
+    , lastEvaluatedKey:
+      LastEvaluatedKey <$> uorToMaybe res."LastEvaluatedKey"
     }
 
   where
@@ -404,7 +393,7 @@ query2 _ index { condition, scanIndexForward } = do
 
     params table =
       { "TableName": table
-      , "IndexName": ""--maybeToUor (indexName index)
+      , "IndexName": maybeToUor (indexName index)
       , "KeyConditionExpression": expr
       , "ExpressionAttributeNames": maybeToUor attributeNames
       , "ExpressionAttributeValues": maybeToUor attributeValues

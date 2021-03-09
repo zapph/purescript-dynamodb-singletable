@@ -91,7 +91,7 @@ query ::
   RIO env { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
           , "Count" :: Int
           , "Items" :: Array (Object AttributeValue)
-          , "LastEvaluatedKey" :: UndefinedOr AVObject
+          , "LastEvaluatedKey" :: UndefinedOr AttributeValue
           , "ScannedCount" :: Int
           }
 query = _callDbFn "query"
