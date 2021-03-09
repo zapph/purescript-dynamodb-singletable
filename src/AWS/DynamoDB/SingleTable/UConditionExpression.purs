@@ -11,9 +11,7 @@ import AWS.DynamoDB.SingleTable.Path (Path, pathToString)
 import AWS.DynamoDB.SingleTable.Types (AttributeValue)
 import Data.Foldable (intercalate)
 import Data.List.NonEmpty (NonEmptyList)
-import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Traversable (traverse)
-import Type.Data.Symbol (reflectSymbol)
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html
 
@@ -32,7 +30,7 @@ data Condition =
   | CContains Path Operand
 
 data Operand =
-  OPath String
+  OPath Path
   | OValue AttributeValue
 
 data Comparator =
@@ -130,10 +128,10 @@ instance toValueCContains' ::
     CContains (toValue s) (toValue op)
 
 -- Operand
-data OPath' (s :: Symbol) = OPath'
+data OPath' p = OPath' p
 
-instance toValueOPath' :: IsSymbol s => ToValue (OPath' s) Operand where
-  toValue _ = OPath (reflectSymbol (SProxy :: _ s))
+instance toValueOPath' :: ToValue p Path => ToValue (OPath' p) Operand where
+  toValue (OPath' p) = OPath (toValue p)
 
 data OValue' v = OValue' v
 instance toValueOValue' :: AVCodec v => ToValue (OValue' v) Operand where
@@ -163,6 +161,14 @@ instance toValueCompGt' :: ToValue CompGt' Comparator where
 data CompGtEq' = CompGtEq'
 instance toValueCompGtEq' :: ToValue CompGtEq' Comparator where
   toValue _ = CompGtEq
+
+buildCondition ::
+  forall c.
+  ToValue c Condition =>
+  c ->
+  CommandBuilder String
+buildCondition =
+  buildParams <<< toValue
 
 buildParams ::
   Condition ->
@@ -209,7 +215,7 @@ buildParams (CContains c a) = ado
 buildOp ::
   Operand ->
   CommandBuilder String
-buildOp (OPath p) = CB.addName p
+buildOp (OPath p) = CB.addName (pathToString p)
 buildOp (OValue v) = CB.addValue v
 
 -- utils

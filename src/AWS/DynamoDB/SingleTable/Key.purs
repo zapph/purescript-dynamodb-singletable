@@ -35,6 +35,7 @@ import Prelude
 
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, readAV, writeAV)
 import AWS.DynamoDB.SingleTable.DynKeySegment (class DynKeySegmentCodec, DynKeySegment, decodeDynKeySegment, encodeDynKeySegment)
+import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
 import Control.MonadPlus (guard)
 import Data.Maybe (Maybe(..))
 import Data.String as String
@@ -52,6 +53,9 @@ derive instance keyOrd :: Ord (Key l)
 
 instance keyShow :: Show (Key l) where
   show (Key s) = "(Key " <> s <> ")"
+
+instance keyToValue :: ToValue (Key l) String where
+  toValue = printKey
 
 instance keyAVCodec ::
   ( ToKeySegmentList s l

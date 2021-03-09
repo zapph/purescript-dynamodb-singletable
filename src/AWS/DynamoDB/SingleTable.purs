@@ -7,6 +7,7 @@ module AWS.DynamoDB.SingleTable
        , updateItem
        , transactWriteItems
        , query
+       , query2
        , queryPrimaryBySkPrefix
        , queryGsi1BySkPrefix
        , queryGsi2BySkPrefix
@@ -26,10 +27,13 @@ import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd, cEq)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
 import AWS.DynamoDB.SingleTable.Index (class IndexValue, class IsIndex, indexName)
+import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
+import AWS.DynamoDB.SingleTable.QueryFilter (class QueryFilter)
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
 import AWS.DynamoDB.SingleTable.Types (class HasPath, class HasSingleTableDb, AVObject(..), AttributeValue, PrimaryKey, SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, PrimaryKey, dbL) as E
+import AWS.DynamoDB.SingleTable.UConditionExpression as U
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Alt ((<|>))
 import Control.Monad.Error.Class (class MonadThrow)
@@ -367,6 +371,40 @@ query index { pk, skCondition, scanIndexForward } = do
     params table =
       { "TableName": table
       , "IndexName": maybeToUor (indexName index)
+      , "KeyConditionExpression": expr
+      , "ExpressionAttributeNames": maybeToUor attributeNames
+      , "ExpressionAttributeValues": maybeToUor attributeValues
+      , "ScanIndexForward": scanIndexForward
+      }
+
+query2 ::
+  forall env index indexName a b pkName skName c.
+  HasSingleTableDb env =>
+  IsIndex index indexName pkName skName =>
+  QueryFilter pkName skName c a b =>
+  ToValue c U.Condition =>
+  ItemCodec b =>
+  Repo a ->
+  index ->
+  { condition :: c
+  , scanIndexForward :: Boolean
+  } ->
+  RIO env { items :: Array b }
+query2 _ index { condition, scanIndexForward } = do
+  table <- getTable
+  res <- Cl.query (params table)
+  items <- traverse readItemOrErr res."Items"
+  pure
+    { items
+    }
+
+  where
+    { value: expr, attributeNames, attributeValues } =
+      CmdB.build $ U.buildCondition condition
+
+    params table =
+      { "TableName": table
+      , "IndexName": ""--maybeToUor (indexName index)
       , "KeyConditionExpression": expr
       , "ExpressionAttributeNames": maybeToUor attributeNames
       , "ExpressionAttributeValues": maybeToUor attributeValues

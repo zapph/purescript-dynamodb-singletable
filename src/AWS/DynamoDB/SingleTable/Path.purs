@@ -1,7 +1,7 @@
 module AWS.DynamoDB.SingleTable.Path
        ( Path
        , pathToString
-       , Path'
+       , Path'(..)
        ) where
 
 import Prelude
