@@ -8,7 +8,7 @@ import AWS.DynamoDB.SingleTable.DynKeySegment (DynKeySegment, normalizedDynKeySe
 import AWS.DynamoDB.SingleTable.Index (PrimaryIndex(..))
 import AWS.DynamoDB.SingleTable.Key (Key, mkKey)
 import AWS.DynamoDB.SingleTable.Path (Path'(..))
-import AWS.DynamoDB.SingleTable.Schema (getItem, queryPrimaryBySkPrefix)
+import AWS.DynamoDB.SingleTable.Schema (getItem)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
 import AWS.DynamoDB.SingleTable.UConditionExpression (CAnd'(..), CBeginsWith'(..), CComp'(..), CompEq'(..), OPath'(..), OValue'(..))
 import Data.Maybe (Maybe)
@@ -105,12 +105,15 @@ queryOrderWithItemsSample =
 
 queryOrderItemsSample :: forall env. HasSingleTableDb env => RIO env (Array OrderItem)
 queryOrderItemsSample =
-  queryPrimaryBySkPrefix repo
-    { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
-    , skPrefix: mkOrderItemSk { orderId: normalizedDynKeySegment "1234"
-                              , orderNum: normalizedDynKeySegment "0001"
-                              }
-    }
+  _.items <$> query repo PrimaryIndex
+  { condition: beginsWithCond
+      { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+      , skPrefix: mkOrderItemSk { orderId: normalizedDynKeySegment "1234"
+                                , orderNum: normalizedDynKeySegment "0001"
+                                }
+      }
+  , scanIndexForward: false
+  }
 
 beginsWithCond :: forall pk skPrefix.
   { pk :: pk

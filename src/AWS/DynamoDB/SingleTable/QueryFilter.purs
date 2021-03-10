@@ -9,6 +9,7 @@ import AWS.DynamoDB.SingleTable.UConditionExpression (CAnd', CBeginsWith', CComp
 import Data.Variant (Variant)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row as Row
+import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
 import Type.Data.Boolean (class And)
 
 class QueryFilter (pkName :: Symbol) (skName :: Symbol) condition all filtered | pkName skName condition all -> filtered
@@ -52,11 +53,25 @@ else instance queryPrimaryBySkPrefixFilterNonRecord ::
   Filter (QueryPrimaryBySkPrefix pkName skName prefix) a False
 
 instance qfBeginsWith ::
-  FilterRows (QueryPrimaryBySkPrefix pkName skName prefix) a b =>
+  ( FilterRows (QueryPrimaryBySkPrefix pkName skName prefix) a b
+  , SimplifyVariant b b'
+  ) =>
   QueryFilter pkName skName
   (CAnd'
    (CComp' (OPath' (Path' pkName)) CompEq' (OValue' (Key pkValue)))
    (CBeginsWith' (Path' skName) (Key prefix))
   )
   (Variant a)
-  (Variant b)
+  b'
+
+class SimplifyVariant (a :: # Type) (b :: Type) | a -> b
+
+instance simplifyVariantI ::
+  ( RowToList a rl
+  , SimplifyVariantRl rl a b
+  ) => SimplifyVariant a b
+
+class SimplifyVariantRl (rl :: RowList) (a :: # Type) (b :: Type) | rl a -> b
+
+instance simplifyVariantRl1 :: SimplifyVariantRl (Cons k v Nil) a v
+else instance simplifyVariantRlOther :: SimplifyVariantRl rl a (Variant a)
