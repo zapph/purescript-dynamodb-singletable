@@ -1,5 +1,53 @@
 module AWS.DynamoDB.SingleTable.UConditionExpression
-       where
+       ( Condition(..)
+       , Operand(..)
+       , Comparator(..)
+       , CComp'
+       , ceq
+       , cneq
+       , clt
+       , cltEq
+       , cgt
+       , cgtEq
+       , CBetween'
+       , between
+       , CIn'
+       , cin
+       , CAnd'
+       , cand
+       , COr'
+       , cor
+       , CNot'
+       , cnot
+       , CAttributeExists'
+       , attributeExists
+       , CAttributeNotExists'
+       , attributeNotExists
+       , CBeginsWith'
+       , beginsWith
+       , CContains'
+       , contains
+       , OPath'
+       , opath
+       , OValue'
+       , ovalue
+       , CompEq'
+       , CompNEq'
+       , CompLt'
+       , CompLtEq'
+       , CompGt'
+       , CompGtEq'
+       , (:=)
+       , (:<>)
+       , (:<)
+       , (:<=)
+       , (:>)
+       , (:>=)
+       , (:!)
+       , (:&&)
+       , (:||)
+       , buildCondition
+       ) where
 
 import Prelude
 
@@ -7,10 +55,13 @@ import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, avS, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CB
 import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue, class ToValueList1, toValue, toValueList1)
-import AWS.DynamoDB.SingleTable.Path (Path, pathToString)
+import AWS.DynamoDB.SingleTable.Path (Path, mkPath, pathToString)
 import AWS.DynamoDB.SingleTable.Types (AttributeValue)
 import Data.Foldable (intercalate)
+import Data.Generic.Rep (class Generic)
+import Data.Generic.Rep.Show (genericShow)
 import Data.List.NonEmpty (NonEmptyList)
+import Data.Symbol (class IsSymbol)
 import Data.Traversable (traverse)
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html
@@ -29,9 +80,19 @@ data Condition =
   | CBeginsWith Path String
   | CContains Path Operand
 
+derive instance conditionEq :: Eq Condition
+derive instance conditionGeneric :: Generic Condition _
+instance conditionShow :: Show Condition where
+  show x = genericShow x
+
 data Operand =
   OPath Path
   | OValue AttributeValue
+
+derive instance operandEq :: Eq Operand
+derive instance operandGeneric :: Generic Operand _
+instance operandShow :: Show Operand where
+  show = genericShow
 
 data Comparator =
   CompEq
@@ -41,101 +102,232 @@ data Comparator =
   | CompGt
   | CompGtEq
 
+derive instance comparatorEq :: Eq Comparator
+derive instance comparatorGeneric :: Generic Comparator _
+instance comparatorShow :: Show Comparator where
+  show = genericShow
+
 -- can this be solved using Generic?
 
 -- Condition
-data CComp' l comp r = CComp' l comp r
-instance toValueCComp' ::
-  ( ToValue l Operand
-  , ToValue comp Comparator
-  , ToValue r Operand
-  ) => ToValue (CComp' l comp r) Condition where
-  toValue (CComp' l comp r) = CComp (toValue l) (toValue comp) (toValue r)
+newtype CComp' l comp r = CComp' Condition
+instance toValueCComp' :: ToValue (CComp' l comp r) Condition where
+  toValue (CComp' c) = c
 
-data CBetween' op min max = CBetween' op min max
-instance toValueCBetween' ::
-  ( ToValue op Operand
-  , ToValue min Operand
-  , ToValue max Operand
-  ) => ToValue (CBetween' op min max) Condition where
-  toValue (CBetween' op min max) =
-    CBetween (toValue op) { min: toValue min, max: toValue max }
+ccomp ::
+  forall comp l r.
+  ToValue comp Comparator =>
+  ToValue l Operand =>
+  ToValue r Operand =>
+  comp ->
+  l ->
+  r ->
+  CComp' l comp r
+ccomp comp l r =
+  CComp' $ CComp (toValue l) (toValue comp) (toValue r)
 
-data CIn' op opts = CIn' op opts
+ceq ::
+  forall l r.
+  ToValue l Operand =>
+  ToValue r Operand =>
+  l ->
+  r ->
+  CComp' l CompEq' r
+ceq = ccomp CompEq'
+
+cneq ::
+  forall l r.
+  ToValue l Operand =>
+  ToValue r Operand =>
+  l ->
+  r ->
+  CComp' l CompNEq' r
+cneq = ccomp CompNEq'
+
+clt ::
+  forall l r.
+  ToValue l Operand =>
+  ToValue r Operand =>
+  l ->
+  r ->
+  CComp' l CompLt' r
+clt = ccomp CompLt'
+
+cltEq ::
+  forall l r.
+  ToValue l Operand =>
+  ToValue r Operand =>
+  l ->
+  r ->
+  CComp' l CompLtEq' r
+cltEq = ccomp CompLtEq'
+
+cgt ::
+  forall l r.
+  ToValue l Operand =>
+  ToValue r Operand =>
+  l ->
+  r ->
+  CComp' l CompGt' r
+cgt = ccomp CompGt'
+
+cgtEq ::
+  forall l r.
+  ToValue l Operand =>
+  ToValue r Operand =>
+  l ->
+  r ->
+  CComp' l CompGtEq' r
+cgtEq = ccomp CompGtEq'
+
+newtype CBetween' op min max = CBetween' Condition
+instance toValueCBetween' :: ToValue (CBetween' op min max) Condition where
+  toValue (CBetween' cond) = cond
+
+between ::
+  forall op min max.
+  ToValue op Operand =>
+  ToValue min Operand =>
+  ToValue max Operand =>
+  op ->
+  { min :: min, max :: max } ->
+  CBetween' op min max
+between op { min, max } =
+  CBetween' $ CBetween (toValue op) { min: toValue min, max: toValue max }
+
+newtype CIn' op opts = CIn' Condition
 instance toValueCIn' ::
   ( ToValue op Operand
   , ToValueList1 opts Operand
   ) => ToValue (CIn' op opts) Condition where
-  toValue (CIn' op opts) =
-    CIn (toValue op) (toValueList1 opts)
+  toValue (CIn' cond) = cond
 
-data CAnd' l r = CAnd' l r
-instance toValueCAnd' ::
-  ( ToValue l Condition
-  , ToValue r Condition
-  ) => ToValue (CAnd' l r) Condition where
-  toValue (CAnd' l r) =
-    CAnd (toValue l) (toValue r)
+cin ::
+  forall op opts.
+  ToValue op Operand =>
+  ToValueList1 opts Operand =>
+  op ->
+  opts ->
+  CIn' op opts
+cin op opts = CIn' $ CIn (toValue op) (toValueList1 opts)
 
-data COr' l r = COr' l r
-instance toValueCOr' ::
-  ( ToValue l Condition
-  , ToValue r Condition
-  ) => ToValue (COr' l r) Condition where
-  toValue (COr' l r) =
-    COr (toValue l) (toValue r)
+newtype CAnd' l r = CAnd' Condition
+instance toValueCAnd' :: ToValue (CAnd' l r) Condition where
+  toValue (CAnd' cond) = cond
 
-data CNot' cond = CNot' cond
-instance toValueCNot' ::
-  ToValue cond Condition =>
-  ToValue (CNot' cond) Condition where
-  toValue (CNot' cond) =
-    CNot (toValue cond)
+cand ::
+  forall l r.
+  ToValue l Condition =>
+  ToValue r Condition =>
+  l ->
+  r ->
+  CAnd' l r
+cand l r = CAnd' $ CAnd (toValue l) (toValue r)
 
-data CAttributeExists' p = CAttributeExists' p
+newtype COr' l r = COr' Condition
+instance toValueCOr' :: ToValue (COr' l r) Condition where
+  toValue (COr' cond) = cond
+
+cor ::
+  forall l r.
+  ToValue l Condition =>
+  ToValue r Condition =>
+  l ->
+  r ->
+  COr' l r
+cor l r = COr' $ COr (toValue l) (toValue r)
+
+newtype CNot' c = CNot' Condition
+instance toValueCNot' :: ToValue (CNot' c) Condition where
+  toValue (CNot' cond) = cond
+
+cnot ::
+  forall c.
+  ToValue c Condition =>
+  c ->
+  CNot' c
+cnot c = CNot' $ CNot (toValue c)
+
+newtype CAttributeExists' (p :: Symbol) = CAttributeExists' Condition
 instance toValueCAttributeExists' ::
-  ToValue p Path =>
   ToValue (CAttributeExists' p) Condition where
-  toValue (CAttributeExists' p) =
-    CAttributeExists (toValue p)
+  toValue (CAttributeExists' cond) = cond
 
-data CAttributeNotExists' p = CAttributeNotExists' p
+attributeExists ::
+  forall proxy p.
+  IsSymbol p =>
+  proxy p ->
+  CAttributeExists' p
+attributeExists p =
+  CAttributeExists' $ CAttributeExists (mkPath p)
+
+newtype CAttributeNotExists' (p :: Symbol) = CAttributeNotExists' Condition
 instance toValueCAttributeNotExists' ::
-  ToValue p Path =>
   ToValue (CAttributeNotExists' p) Condition where
 
-  toValue (CAttributeNotExists' p) =
-    CAttributeNotExists (toValue p)
+  toValue (CAttributeNotExists' cond) = cond
+
+attributeNotExists ::
+  forall proxy p.
+  IsSymbol p =>
+  proxy p ->
+  CAttributeNotExists' p
+attributeNotExists p =
+  CAttributeNotExists' $ CAttributeNotExists (mkPath p)
 
 -- | CAttributeType Path Typ = Path Typ
-data CBeginsWith' p pfx = CBeginsWith' p pfx
+newtype CBeginsWith' p pfx = CBeginsWith' Condition
 
-instance toValueCBeginsWith' ::
-  ( ToValue p Path
-  , ToValue pfx String
-  ) =>
-  ToValue (CBeginsWith' p pfx) Condition where
-  toValue (CBeginsWith' p pfx) =
-    CBeginsWith (toValue p) (toValue pfx)
+instance toValueCBeginsWith' :: ToValue (CBeginsWith' p pfx) Condition where
+  toValue (CBeginsWith' cond) = cond
 
-data CContains' s op = CContains' s op
+beginsWith ::
+  forall p pfx.
+  ToValue p Path =>
+  ToValue pfx String =>
+  p ->
+  pfx ->
+  CBeginsWith' p pfx
+beginsWith p pfx = CBeginsWith' $ CBeginsWith (toValue p) (toValue pfx)
 
-instance toValueCContains' ::
-  ( ToValue s Path
-  , ToValue op Operand
-  ) => ToValue (CContains' s op) Condition where
-  toValue (CContains' s op) =
-    CContains (toValue s) (toValue op)
+newtype CContains' (p :: Symbol) op = CContains' Condition
+
+instance toValueCContains' :: ToValue (CContains' s op) Condition where
+  toValue (CContains' cond) = cond
+
+contains ::
+  forall proxy p op.
+  IsSymbol p =>
+  ToValue op Operand =>
+  proxy p ->
+  op ->
+  CContains' p op
+contains p op =
+  CContains' $ CContains (mkPath p) (toValue op)
 
 -- Operand
-data OPath' p = OPath' p
 
-instance toValueOPath' :: ToValue p Path => ToValue (OPath' p) Operand where
-  toValue (OPath' p) = OPath (toValue p)
+newtype OPath' (p :: Symbol) = OPath' Operand
+instance toValueOPath' :: ToValue (OPath' p) Operand where
+  toValue (OPath' o) = o
 
-data OValue' v = OValue' v
-instance toValueOValue' :: AVCodec v => ToValue (OValue' v) Operand where
-  toValue (OValue' v) = OValue (writeAV v)
+opath ::
+  forall proxy p.
+  IsSymbol p =>
+  proxy p ->
+  OPath' p
+opath p = OPath' $ OPath (mkPath p)
+
+newtype OValue' v = OValue' Operand
+instance toValueOValue' :: ToValue (OValue' v) Operand where
+  toValue (OValue' o) = o
+
+ovalue ::
+  forall v.
+  AVCodec v =>
+  v ->
+  OValue' v
+ovalue v = OValue' $ OValue (writeAV v)
 
 -- Comparator
 data CompEq' = CompEq'
@@ -162,6 +354,37 @@ data CompGtEq' = CompGtEq'
 instance toValueCompGtEq' :: ToValue CompGtEq' Comparator where
   toValue _ = CompGtEq
 
+--
+
+{-
+
+DynamoDB evaluates conditions from left to right using the following precedence rules:
+
+* = <> < <= > >=
+* IN
+* BETWEEN
+* attribute_exists attribute_not_exists begins_with contains
+* Parentheses
+* NOT
+* AND
+* OR
+
+-}
+
+
+infixl 5 ceq as :=
+infixl 5 cneq as :<>
+infixl 5 clt as :<
+infixl 5 cltEq as :<=
+infixl 5 cgt as :>
+infixl 5 cgtEq as :>=
+infixl 4 cnot as :!
+infixl 3 cand as :&&
+infixl 2 cor as :||
+
+--
+
+-- builder
 buildCondition ::
   forall c.
   ToValue c Condition =>

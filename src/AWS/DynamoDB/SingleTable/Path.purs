@@ -1,5 +1,6 @@
 module AWS.DynamoDB.SingleTable.Path
-       ( Path
+       ( Path(..)
+       , mkPath
        , pathToString
        , Path'(..)
        ) where
@@ -10,6 +11,13 @@ import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 
 newtype Path = Path String
+
+mkPath ::
+  forall proxy p.
+  IsSymbol p =>
+  proxy p ->
+  Path
+mkPath _ = Path (reflectSymbol (SProxy :: _ p))
 
 derive instance pathEq :: Eq Path
 derive instance pathOrd :: Ord Path
@@ -22,4 +30,4 @@ pathToString (Path s) = s
 data Path' (s :: Symbol) = Path'
 
 instance pathToValue :: IsSymbol s => ToValue (Path' s) Path where
-  toValue _ = Path (reflectSymbol (SProxy :: _ s))
+  toValue = mkPath

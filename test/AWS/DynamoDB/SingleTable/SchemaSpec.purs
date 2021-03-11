@@ -10,7 +10,7 @@ import AWS.DynamoDB.SingleTable.Key (Key, mkKey)
 import AWS.DynamoDB.SingleTable.Path (Path'(..))
 import AWS.DynamoDB.SingleTable.Schema (getItem)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
-import AWS.DynamoDB.SingleTable.UConditionExpression (CAnd'(..), CBeginsWith'(..), CComp'(..), CompEq'(..), OPath'(..), OValue'(..))
+import AWS.DynamoDB.SingleTable.UConditionExpression (beginsWith, opath, ovalue, (:&&), (:=))
 import Data.Maybe (Maybe)
 import Data.Variant (Variant)
 import RIO (RIO)
@@ -86,42 +86,39 @@ getOrderSample =
 queryUserWithOrderAndItemsSample :: forall env. HasSingleTableDb env => RIO env (Array (Variant (user :: User, order :: Order, orderItem :: OrderItem)))
 queryUserWithOrderAndItemsSample =
   _.items <$> query repo PrimaryIndex
-    { condition: beginsWithCond
-      { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
-      , skPrefix: blankSk
-      }
+    { condition: opath _pk := ovalue pk :&& beginsWith _sk blankSk
     , scanIndexForward: false
     }
+  where
+    pk = mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
 
 queryOrderWithItemsSample :: forall env. HasSingleTableDb env => RIO env (Array (Variant (order :: Order, orderItem :: OrderItem)))
 queryOrderWithItemsSample =
   _.items <$> query repo PrimaryIndex
-    { condition: beginsWithCond
-      { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
-      , skPrefix: mkOrderSk { orderId: normalizedDynKeySegment "1234" }
-      }
+    { condition: opath _pk := ovalue pk :&& beginsWith _sk skPrefix
     , scanIndexForward: false
     }
+  where
+    pk = mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
+    skPrefix = mkOrderSk { orderId: normalizedDynKeySegment "1234" }
 
 queryOrderItemsSample :: forall env. HasSingleTableDb env => RIO env (Array OrderItem)
 queryOrderItemsSample =
   _.items <$> query repo PrimaryIndex
-  { condition: beginsWithCond
-      { pk: mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
-      , skPrefix: mkOrderItemSk { orderId: normalizedDynKeySegment "1234"
-                                , orderNum: normalizedDynKeySegment "0001"
-                                }
-      }
+  { condition: opath _pk := ovalue pk :&& beginsWith _sk skPrefix
   , scanIndexForward: false
   }
+  where
+    pk =
+      mkUserPk { username: normalizedDynKeySegment "alexdebrie" }
 
-beginsWithCond :: forall pk skPrefix.
-  { pk :: pk
-  , skPrefix :: skPrefix
-  }
-  -> CAnd' (CComp' (OPath' (Path' "pk")) CompEq' (OValue' pk)) (CBeginsWith' (Path' "sk") skPrefix)
-beginsWithCond { pk, skPrefix } =
-  (CAnd'
-   (CComp' (OPath' (Path' :: _ "pk")) CompEq' (OValue' pk))
-   (CBeginsWith' (Path' :: _ "sk") skPrefix)
-  )
+    skPrefix =
+      mkOrderItemSk { orderId: normalizedDynKeySegment "1234"
+                    , orderNum: normalizedDynKeySegment "0001"
+                    }
+
+_pk :: Path' "pk"
+_pk = Path'
+
+_sk :: Path' "sk"
+_sk = Path'

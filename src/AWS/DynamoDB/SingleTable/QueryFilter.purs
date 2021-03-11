@@ -58,7 +58,7 @@ instance qfBeginsWith ::
   ) =>
   QueryFilter pkName skName
   (CAnd'
-   (CComp' (OPath' (Path' pkName)) CompEq' (OValue' (Key pkValue)))
+   (CComp' (OPath' pkName) CompEq' (OValue' (Key pkValue)))
    (CBeginsWith' (Path' skName) (Key prefix))
   )
   (Variant a)
