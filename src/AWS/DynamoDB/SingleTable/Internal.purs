@@ -1,6 +1,8 @@
 module AWS.DynamoDB.SingleTable.Internal
        ( jsonStringify
        , objEqual
+       , Nothing'
+       , Just'
        , class On1
        , on1
        , class FilterRows
@@ -14,16 +16,20 @@ module AWS.DynamoDB.SingleTable.Internal
 
 import Prelude
 
+import Data.Maybe (Maybe)
 import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Variant (Variant, case_, on)
 import Prim.Boolean (False, True)
 import Prim.Row as Row
-import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
+import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Type.Data.Boolean (class If)
 import Type.Row (RProxy)
 
 foreign import jsonStringify :: forall a. a -> String
 foreign import objEqual :: forall a. a -> a -> Boolean
+
+foreign import data Just' :: forall a. a -> Maybe a
+foreign import data Nothing' :: forall a. Maybe a
 
 class On1 (r :: Row Type) v | r -> v where
   on1 :: Variant r -> v

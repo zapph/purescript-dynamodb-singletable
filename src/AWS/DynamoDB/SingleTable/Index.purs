@@ -11,9 +11,11 @@ module AWS.DynamoDB.SingleTable.Index
        , class IndexValue
        ) where
 
-import AWS.DynamoDB.SingleTable.Internal.SymbolUtils (class IsSymbolMaybe, SMJust, SMNothing, SMProxy(..), reflectSymbolMaybe, kind SymbolMaybe)
+import AWS.DynamoDB.SingleTable.Internal (Just', Nothing')
+import AWS.DynamoDB.SingleTable.Internal.SymbolUtils (class IsSymbolMaybe, reflectSymbolMaybe)
 import Data.Maybe (Maybe)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Type.Proxy (Proxy(..))
 
 data PrimaryIndex = PrimaryIndex
 data Gsi1 = Gsi1
@@ -25,13 +27,13 @@ class
   ( IsSymbolMaybe indexName
   , IsSymbol pkName
   , IsSymbol skName
-  ) <= IsIndex (a :: Type) (indexName :: SymbolMaybe) (pkName :: Symbol) (skName :: Symbol) | a -> indexName pkName skName
+  ) <= IsIndex (a :: Type) (indexName :: Maybe Symbol) (pkName :: Symbol) (skName :: Symbol) | a -> indexName pkName skName
 
-instance isIndexPrimary :: IsIndex PrimaryIndex SMNothing "pk" "sk"
-instance isIndexGsi1 :: IsIndex Gsi1 (SMJust "gsi1") "gsi1pk" "gsi1sk"
-instance isIndexGsi2 :: IsIndex Gsi2 (SMJust "gsi2") "gsi2pk" "gsi2sk"
-instance isIndexGsi3 :: IsIndex Gsi3 (SMJust "gsi3") "gsi3pk" "gsi3sk"
-instance isIndexGsi4 :: IsIndex Gsi4 (SMJust "gsi4") "gsi4pk" "gsi4sk"
+instance isIndexPrimary :: IsIndex PrimaryIndex Nothing' "pk" "sk"
+instance isIndexGsi1 :: IsIndex Gsi1 (Just' "gsi1") "gsi1pk" "gsi1sk"
+instance isIndexGsi2 :: IsIndex Gsi2 (Just' "gsi2") "gsi2pk" "gsi2sk"
+instance isIndexGsi3 :: IsIndex Gsi3 (Just' "gsi3") "gsi3pk" "gsi3sk"
+instance isIndexGsi4 :: IsIndex Gsi4 (Just' "gsi4") "gsi4pk" "gsi4sk"
 
 indexName ::
   forall a indexName pkName skName.
@@ -39,7 +41,7 @@ indexName ::
   a ->
   Maybe String
 indexName _ =
-  reflectSymbolMaybe (SMProxy :: _ indexName)
+  reflectSymbolMaybe (Proxy :: _ indexName)
 
 pkName ::
   forall a indexName pkName skName.

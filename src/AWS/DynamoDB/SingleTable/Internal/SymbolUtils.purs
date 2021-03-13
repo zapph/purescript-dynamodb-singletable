@@ -1,9 +1,5 @@
 module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
-       ( SymbolMaybe
-       , SMNothing
-       , SMJust
-       , SMProxy(..)
-       , class IsSymbolMaybe
+       ( class IsSymbolMaybe
        , reflectSymbolMaybe
        , SymbolList
        , SLCons
@@ -21,6 +17,7 @@ module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
        , class SymbolEq
        ) where
 
+import AWS.DynamoDB.SingleTable.Internal (Just', Nothing')
 import Data.List (List(..))
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
@@ -28,22 +25,16 @@ import Prim.Boolean (False, True)
 import Prim.Ordering (EQ, Ordering)
 import Prim.Symbol as Symbol
 
-data SymbolMaybe
-foreign import data SMJust :: Symbol -> SymbolMaybe
-foreign import data SMNothing :: SymbolMaybe
-
-data SMProxy (m :: SymbolMaybe) = SMProxy
-
-class IsSymbolMaybe (m :: SymbolMaybe) where
-  reflectSymbolMaybe :: SMProxy m -> Maybe String
+class IsSymbolMaybe (m :: Maybe Symbol) where
+  reflectSymbolMaybe :: forall f. f m -> Maybe String
 
 instance isSymbolMaybeNothing ::
-  IsSymbolMaybe SMNothing where
+  IsSymbolMaybe Nothing' where
   reflectSymbolMaybe _ = Nothing
 
 instance isSymbolMaybeJust ::
   IsSymbol s =>
-  IsSymbolMaybe (SMJust s) where
+  IsSymbolMaybe (Just' s) where
   reflectSymbolMaybe _ = Just (reflectSymbol (SProxy :: _ s))
 
 data SymbolList
