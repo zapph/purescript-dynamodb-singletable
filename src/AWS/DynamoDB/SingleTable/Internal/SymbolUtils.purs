@@ -1,11 +1,6 @@
 module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
        ( class IsSymbolMaybe
        , reflectSymbolMaybe
-       , SymbolList
-       , SLCons
-       , SLNil
-       , type (:+)
-       , SLProxy(..)
        , class IsSymbolList
        , reflectSymbolList
        , class IsCharUpper
@@ -17,13 +12,14 @@ module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
        , class SymbolEq
        ) where
 
-import AWS.DynamoDB.SingleTable.Internal (Just', Nothing')
+import AWS.DynamoDB.SingleTable.Internal (Cons', Just', List', Nil', Nothing')
 import Data.List (List(..))
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Prim.Boolean (False, True)
 import Prim.Ordering (EQ, Ordering)
 import Prim.Symbol as Symbol
+import Type.Proxy (Proxy(..))
 
 class IsSymbolMaybe (m :: Maybe Symbol) where
   reflectSymbolMaybe :: forall f. f m -> Maybe String
@@ -37,28 +33,19 @@ instance isSymbolMaybeJust ::
   IsSymbolMaybe (Just' s) where
   reflectSymbolMaybe _ = Just (reflectSymbol (SProxy :: _ s))
 
-data SymbolList
-foreign import data SLNil :: SymbolList
-foreign import data SLCons :: Symbol -> SymbolList -> SymbolList
-
-infixr 4 type SLCons as :+
-
-data SLProxy (m :: SymbolList) = SLProxy
-
-class IsSymbolList (l :: SymbolList) where
-  reflectSymbolList :: SLProxy l -> List String
+class IsSymbolList (l :: List') where
+  reflectSymbolList :: forall f. f l -> List String
 
 instance isSymbolListNothing ::
-  IsSymbolList SLNil where
+  IsSymbolList Nil' where
   reflectSymbolList _ = Nil
 
 instance isSymbolListJust ::
   ( IsSymbol h
   , IsSymbolList tl
   ) =>
-  IsSymbolList (SLCons h tl) where
-  reflectSymbolList _ = Cons (reflectSymbol (SProxy :: _ h)) (reflectSymbolList (SLProxy :: _ tl))
-
+  IsSymbolList (Cons' h tl) where
+  reflectSymbolList _ = Cons (reflectSymbol (SProxy :: _ h)) (reflectSymbolList (Proxy :: _ tl))
 
 class IsCharUpper (c :: Symbol)
 
@@ -98,24 +85,24 @@ else instance isWordAllUpperCons ::
   , IsWordAllUpper t
   ) => IsWordAllUpper s
 
-class SymbolSplitWithChar (sep :: Symbol) (s :: Symbol) (r :: SymbolList) | sep s -> r
+class SymbolSplitWithChar (sep :: Symbol) (s :: Symbol) (r :: List') | sep s -> r
 
 instance symbolSplitWithCharI :: SymbolSplitWithChar' sep s "" r => SymbolSplitWithChar sep s r
 
-class SymbolSplitWithChar' (sep :: Symbol) (s :: Symbol) (acc :: Symbol) (r :: SymbolList) | sep s acc -> r
+class SymbolSplitWithChar' (sep :: Symbol) (s :: Symbol) (acc :: Symbol) (r :: List') | sep s acc -> r
 
-instance symbolSplitWithCharNil :: SymbolSplitWithChar' sep "" acc (SLCons acc SLNil)
+instance symbolSplitWithCharNil :: SymbolSplitWithChar' sep "" acc (Cons' acc Nil')
 else instance symbolSplitWithCharMatch ::
   ( Symbol.Cons h tl s
   , Symbol.Compare h sep cmp
   , SymbolSplitAcc cmp sep h tl acc r
   ) => SymbolSplitWithChar' sep s acc r
 
-class SymbolSplitAcc (cmp :: Ordering) (sep :: Symbol) (h :: Symbol) (tl :: Symbol) (acc :: Symbol) (r :: SymbolList) | sep cmp h tl acc -> r
+class SymbolSplitAcc (cmp :: Ordering) (sep :: Symbol) (h :: Symbol) (tl :: Symbol) (acc :: Symbol) (r :: List') | sep cmp h tl acc -> r
 
 instance symbolSplitAccMatch ::
   ( SymbolSplitWithChar sep tl tlR
-  ) => SymbolSplitAcc EQ sep h tl acc (SLCons acc tlR)
+  ) => SymbolSplitAcc EQ sep h tl acc (Cons' acc tlR)
 
 else instance symbolSplitAccNoMatch ::
   ( Symbol.Append acc h acc'

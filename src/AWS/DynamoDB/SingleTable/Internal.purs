@@ -3,6 +3,9 @@ module AWS.DynamoDB.SingleTable.Internal
        , objEqual
        , Nothing'
        , Just'
+       , List'
+       , Nil'
+       , Cons'
        , class On1
        , on1
        , class FilterRows
@@ -30,6 +33,12 @@ foreign import objEqual :: forall a. a -> a -> Boolean
 
 foreign import data Just' :: forall a. a -> Maybe a
 foreign import data Nothing' :: forall a. Maybe a
+
+data List'
+foreign import data Nil' :: List'
+foreign import data Cons' :: forall a. a -> List' -> List'
+
+infixr 4 type Cons' as :+
 
 class On1 (r :: Row Type) v | r -> v where
   on1 :: Variant r -> v
