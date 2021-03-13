@@ -28,11 +28,10 @@ import AWS.DynamoDB.SingleTable.Types (class HasPath, class HasSingleTableDb, AV
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, LastEvaluatedKey, PrimaryKey, dbL) as E
 import AWS.DynamoDB.SingleTable.UConditionExpression as U
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE
-import Control.Alt ((<|>))
 import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
 import Data.Lens (view)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Traversable (sequence, traverse)
 import Effect (Effect)
 import Effect.Aff (throwError)
@@ -112,11 +111,10 @@ insertItem ::
   a ->
   (Maybe (Condition a)) ->
   RIO env (Maybe a)
-insertItem repo item conditionExprF = putItem repo { item, returnOld: false } finalKeyConditionF
+insertItem repo item conditionExprF = putItem repo { item, returnOld: false } (Just finalKeyConditionF)
   where
   finalKeyConditionF =
-    (conditionExprF <#> cAnd CE.cItemNotExists) <|>
-      (pure $ CE.cItemNotExists)
+    maybe CE.cItemNotExists (_ `cAnd` CE.cItemNotExists) conditionExprF
 
 putItem ::
   forall env a.
@@ -167,12 +165,11 @@ updateExistingItem ::
   PrimaryKey ->
   RIO env a
 updateExistingItem repo retVals updateF keyConditionF pk = do
-  updateItem repo retVals updateF finalKeyConditionF pk
+  updateItem repo retVals updateF (Just finalKeyConditionF) pk
   >>= require "Item"
   where
   finalKeyConditionF =
-    (keyConditionF <#> cAnd CE.cItemExists)
-      <|> pure CE.cItemExists
+    maybe CE.cItemExists (_ `cAnd` CE.cItemExists) keyConditionF
 
 createOrUpdateItem ::
   forall env a.
