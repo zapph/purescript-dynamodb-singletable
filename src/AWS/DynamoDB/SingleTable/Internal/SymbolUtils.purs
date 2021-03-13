@@ -1,11 +1,11 @@
 module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
-       ( kind SymbolMaybe
+       ( SymbolMaybe
        , SMNothing
        , SMJust
        , SMProxy(..)
        , class IsSymbolMaybe
        , reflectSymbolMaybe
-       , kind SymbolList
+       , SymbolList
        , SLCons
        , SLNil
        , type (:+)
@@ -24,12 +24,11 @@ module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
 import Data.List (List(..))
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
-import Prim.Boolean (False, True, kind Boolean)
-import Prim.Ordering (EQ, kind Ordering)
+import Prim.Boolean (False, True)
+import Prim.Ordering (EQ, Ordering)
 import Prim.Symbol as Symbol
 
-
-foreign import kind SymbolMaybe
+data SymbolMaybe
 foreign import data SMJust :: Symbol -> SymbolMaybe
 foreign import data SMNothing :: SymbolMaybe
 
@@ -47,7 +46,7 @@ instance isSymbolMaybeJust ::
   IsSymbolMaybe (SMJust s) where
   reflectSymbolMaybe _ = Just (reflectSymbol (SProxy :: _ s))
 
-foreign import kind SymbolList
+data SymbolList
 foreign import data SLNil :: SymbolList
 foreign import data SLCons :: Symbol -> SymbolList -> SymbolList
 

@@ -56,12 +56,12 @@ instance hasSingleTableDbId :: HasSingleTableDb SingleTableDb where
   dbL = identity
 
 -- TODO deprecated
-newtype Path a = Path String
+newtype Path (a :: Type) = Path String
 
 derive newtype instance pathEq :: Eq (Path r)
 derive newtype instance pathOrd :: Ord (Path r)
 
-newtype LastEvaluatedKey index = LastEvaluatedKey AttributeValue
+newtype LastEvaluatedKey (index :: Type) = LastEvaluatedKey AttributeValue
 
 -- TODO add haspath for variant
 

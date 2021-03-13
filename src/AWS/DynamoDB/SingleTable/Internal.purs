@@ -16,7 +16,7 @@ import Prelude
 
 import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Variant (Variant, case_, on)
-import Prim.Boolean (False, True, kind Boolean)
+import Prim.Boolean (False, True)
 import Prim.Row as Row
 import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
 import Type.Data.Boolean (class If)
@@ -25,7 +25,7 @@ import Type.Row (RProxy)
 foreign import jsonStringify :: forall a. a -> String
 foreign import objEqual :: forall a. a -> a -> Boolean
 
-class On1 (r :: # Type) v | r -> v where
+class On1 (r :: Row Type) v | r -> v where
   on1 :: Variant r -> v
 
 instance on1I ::
@@ -35,14 +35,14 @@ instance on1I ::
   ) => On1 r v where
   on1 = case_ # on (SProxy :: _ k) identity
 
-class FilterRows filter (r :: # Type) (o :: # Type) | filter r -> o
+class FilterRows (filter :: Type) (r :: Row Type) (o :: Row Type) | filter r -> o
 
 instance filterRows ::
   ( RowToList r rl
   , FilterRowsRl filter rl o
   ) => FilterRows filter r o
 
-class FilterRowsRl filter (rl :: RowList) (o :: # Type) | filter rl -> o
+class FilterRowsRl (filter :: Type) (rl :: RowList Type) (o :: Row Type) | filter rl -> o
 
 instance filterRowsNil ::
   FilterRowsRl filter Nil ()
@@ -54,9 +54,9 @@ instance filterRowsCons ::
   , If isIncluded (RProxy ifMatch) (RProxy tlOpts) (RProxy opts)
   ) => FilterRowsRl filter (Cons k a tl) opts
 
-class Filter filter a (isIncluded :: Boolean) | filter a -> isIncluded
+class Filter (filter :: Type) (a :: Type) (isIncluded :: Boolean) | filter a -> isIncluded
 
-class IsSubset (p :: # Type) (sub :: # Type) (r :: Boolean) | p sub -> r
+class IsSubset (p :: Row Type) (sub :: Row Type) (r :: Boolean) | p sub -> r
 
 instance isSubset ::
   ( RowToList p pRl
@@ -64,7 +64,7 @@ instance isSubset ::
   , IsSubsetRl pRl subRl isSubset
   ) => IsSubset p sub isSubset
 
-class IsSubsetRl (p :: RowList) (sub :: RowList) (r :: Boolean) | p sub -> r
+class IsSubsetRl (p :: RowList Type) (sub :: RowList Type) (r :: Boolean) | p sub -> r
 
 instance isSubsetRlT :: IsSubsetRl p Nil True
 else instance isSubsetRlF :: IsSubsetRl Nil (Cons k v tl) False
@@ -75,11 +75,13 @@ else instance isSubsetRlSkip ::
   IsSubsetRl pTl (Cons k2 v2 subTl) r =>
   IsSubsetRl (Cons k1 v1 pTl) (Cons k2 v2 subTl) r
 
+class HasPath :: forall v a. Symbol -> v -> a -> Constraint
 class HasPath (k :: Symbol) v a | k a -> v
 
 --instance hasPathI :: HasPath' k v a True => HasPath k v a
 instance hasPathI :: Row.Cons k v _r r => HasPath k v {|r}
 
+class HasPath' :: forall v a. Symbol -> v -> a -> Boolean -> Constraint
 class HasPath' (k :: Symbol) v a (hasPath :: Boolean) | k a -> v hasPath
 
 instance hasPathI' ::

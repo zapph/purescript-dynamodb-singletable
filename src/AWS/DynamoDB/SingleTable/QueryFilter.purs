@@ -3,15 +3,16 @@ module AWS.DynamoDB.SingleTable.QueryFilter
 
 import AWS.DynamoDB.SingleTable.Internal (class Filter, class FilterRows)
 import AWS.DynamoDB.SingleTable.Internal.SymbolUtils (class ChompCommonPrefix, class IsSymbolEq)
-import AWS.DynamoDB.SingleTable.Key (class ToKeySegmentList, type (:#:), KC, KD, KNil, Key, kind KeySegmentList)
+import AWS.DynamoDB.SingleTable.Key (class ToKeySegmentList, type (:#:), KC, KD, KNil, Key, KeySegmentList)
 import AWS.DynamoDB.SingleTable.Path (Path')
 import AWS.DynamoDB.SingleTable.UConditionExpression (CAnd', CBeginsWith', CComp', CompEq', OPath', OValue')
 import Data.Variant (Variant)
-import Prim.Boolean (False, True, kind Boolean)
+import Prim.Boolean (False, True)
 import Prim.Row as Row
-import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
+import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Type.Data.Boolean (class And)
 
+class QueryFilter :: forall condition all filtered. Symbol -> Symbol -> condition -> all -> filtered -> Constraint
 class QueryFilter (pkName :: Symbol) (skName :: Symbol) condition all filtered | pkName skName condition all -> filtered
 
 -- begins_with
@@ -64,14 +65,14 @@ instance qfBeginsWith ::
   (Variant a)
   b'
 
-class SimplifyVariant (a :: # Type) (b :: Type) | a -> b
+class SimplifyVariant (a :: Row Type) (b :: Type) | a -> b
 
 instance simplifyVariantI ::
   ( RowToList a rl
   , SimplifyVariantRl rl a b
   ) => SimplifyVariant a b
 
-class SimplifyVariantRl (rl :: RowList) (a :: # Type) (b :: Type) | rl a -> b
+class SimplifyVariantRl (rl :: RowList Type) (a :: Row Type) (b :: Type) | rl a -> b
 
 instance simplifyVariantRl1 :: SimplifyVariantRl (Cons k v Nil) a v
 else instance simplifyVariantRlOther :: SimplifyVariantRl rl a (Variant a)

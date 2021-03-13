@@ -17,7 +17,7 @@ import Data.Variant (Variant)
 import Prim.Boolean (False)
 import RIO (RIO)
 
-data GetItem pk sk
+data GetItem (pk :: Type) (sk :: Type)
 
 instance getItemFilterRecord ::
   IsSubset r (pk :: pk, sk :: sk) isSubset =>

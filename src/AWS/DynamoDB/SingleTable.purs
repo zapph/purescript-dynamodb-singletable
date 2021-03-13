@@ -41,7 +41,7 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import Literals (StringLit, stringLit)
 import RIO (RIO)
-import Untagged.Coercible (class Coercible, coerce)
+import Untagged.Castable (class Castable, cast)
 import Untagged.Union (type (|+|), maybeToUor, uorToMaybe)
 
 
@@ -145,8 +145,8 @@ putItem _ { item, returnOld } condition = do
     else pure Nothing
 
   where
-    retValP :: forall r. Coercible r (StringLit "NONE" |+| StringLit "ALL_OLD") => r -> (StringLit "NONE" |+| StringLit "ALL_OLD")
-    retValP = coerce
+    retValP :: forall r. Castable r (StringLit "NONE" |+| StringLit "ALL_OLD") => r -> (StringLit "NONE" |+| StringLit "ALL_OLD")
+    retValP = cast
 
     { value: conditionExpr, attributeNames, attributeValues } = CmdB.build $ sequence $ CE.buildParams <$> condition
 
@@ -220,8 +220,8 @@ updateItem _ retVals updateF keyConditionF {pk, sk} = do
         URAllOld -> retValU (stringLit :: _ "ALL_OLD")
       }
 
-    retValU :: forall u. Coercible u (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW") => u -> (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
-    retValU = coerce
+    retValU :: forall u. Castable u (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW") => u -> (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
+    retValU = cast
 
 query ::
   forall env index indexName a b pkName skName c.
@@ -261,7 +261,7 @@ query _ index { condition, scanIndexForward } = do
 
 -- Repo
 
-data Repo a = Repo
+data Repo (a :: Type) = Repo
 
 mkRepo ::
   forall a.

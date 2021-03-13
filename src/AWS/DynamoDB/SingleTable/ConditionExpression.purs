@@ -47,7 +47,7 @@ import Unsafe.Coerce (unsafeCoerce)
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html
 
-data Condition a =
+data Condition (a :: Type) =
   CComp (Operand' a) Comparator (Operand' a)
   | CBetween (Operand' a) { min :: Operand' a, max :: Operand' a }
   | CIn (Operand' a) (NonEmptyArray (Operand' a))
@@ -82,7 +82,7 @@ data Typ =
   | TypN
   | TypNS
 
-class Comparable a b
+class Comparable (a :: Type) (b :: Type)
 instance comparableMaybes        :: Comparable (Maybe a) (Maybe a)
 else instance comparableLMaybe   :: Comparable (Maybe a) a
 else instance comparableRMaybe   :: Comparable a (Maybe a)
@@ -156,7 +156,7 @@ cItemNotExists ::
 cItemNotExists =
   cAttributeNotExists (SProxy :: _ "pk")
 
-class CanBeginWith a
+class CanBeginWith (a :: Type)
 instance canBeginWithString :: CanBeginWith String
 instance canBeginWithMaybe :: CanBeginWith a => CanBeginWith (Maybe a)
 
@@ -171,13 +171,13 @@ cBeginsWith ::
 cBeginsWith sp substring =
   CBeginsWith (spToPath sp) substring
 
-class CanContain a
+class CanContain (a :: Type)
 instance canContainString :: CanContain String
 instance canContainMaybeString :: CanContain (Maybe String)
 instance canContainStringSet :: CanContain (NonEmptySet String)
 instance canContainMaybeStringSet :: CanContain (Maybe (NonEmptySet String))
 
-class Containable a
+class Containable (a :: Type)
 instance containableString :: Containable String
 instance containableMaybeString :: Containable (Maybe String)
 

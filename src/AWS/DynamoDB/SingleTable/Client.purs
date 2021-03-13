@@ -28,7 +28,7 @@ import Effect.Aff.Class (liftAff)
 import Foreign.Object (Object)
 import Literals (StringLit)
 import RIO (RIO)
-import Untagged.Coercible (class Coercible)
+import Untagged.Castable (class Castable)
 import Untagged.Union (type (|+|), UndefinedOr)
 
 type Capacity =
@@ -62,7 +62,7 @@ type GetItemReq =
 getItem ::
   forall env req.
   HasSingleTableDb env =>
-  Coercible req GetItemReq =>
+  Castable req GetItemReq =>
   req ->
   RIO env { "Item" :: UndefinedOr (Object AttributeValue) }
 getItem = _callDbFn "getItem"
@@ -86,7 +86,7 @@ type QueryReq =
 query ::
   forall env req.
   HasSingleTableDb env =>
-  Coercible req QueryReq =>
+  Castable req QueryReq =>
   req ->
   RIO env { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
           , "Count" :: Int
@@ -107,7 +107,7 @@ type DeleteItemReq =
 deleteItem ::
   forall env req.
   HasSingleTableDb env =>
-  Coercible req DeleteItemReq =>
+  Castable req DeleteItemReq =>
   req ->
   RIO env { "Attributes" :: UndefinedOr (Object AttributeValue) }
 deleteItem = _callDbFn "deleteItem"
@@ -126,7 +126,7 @@ type PutItemReq =
 putItem ::
   forall env req.
   HasSingleTableDb env =>
-  Coercible req PutItemReq =>
+  Castable req PutItemReq =>
   req ->
   RIO env { "Attributes" :: UndefinedOr (Object AttributeValue)
           , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
@@ -149,7 +149,7 @@ type UpdateItemReq =
 updateItem ::
   forall env req.
   HasSingleTableDb env =>
-  Coercible req UpdateItemReq =>
+  Castable req UpdateItemReq =>
   req ->
   RIO env { "Attributes" :: UndefinedOr (Object AttributeValue)
           , "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
@@ -167,7 +167,7 @@ type TransactWriteItemsReq =
 transactWriteItems ::
   forall env req.
   HasSingleTableDb env =>
-  Coercible req TransactWriteItemsReq =>
+  Castable req TransactWriteItemsReq =>
   req ->
   RIO env { "ConsumedCapacity" :: UndefinedOr ConsumedCapacity
           , "ItemCollectionMetrics" :: UndefinedOr ItemCollectionMetrics

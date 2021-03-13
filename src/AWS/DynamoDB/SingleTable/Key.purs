@@ -1,11 +1,11 @@
 module AWS.DynamoDB.SingleTable.Key
        ( Key
        , printKey
-       , kind KeySegment
+       , KeySegment
        , KC
        , KD
        , KeySegmentProxy(..)
-       , kind KeySegmentList
+       , KeySegmentList
        , KCons
        , KNil
        , type (:#:)
@@ -68,13 +68,13 @@ instance keyAVCodec ::
 printKey :: forall l. Key l -> String
 printKey (Key s) = s
 
-foreign import kind KeySegment
+data KeySegment
 foreign import data KC :: Symbol -> KeySegment
 foreign import data KD :: Symbol -> Type -> KeySegment
 
 data KeySegmentProxy (p :: KeySegment) = KeySegmentProxy
 
-foreign import kind KeySegmentList
+data KeySegmentList
 foreign import data KCons :: KeySegment -> KeySegmentList -> KeySegmentList
 foreign import data KNil :: KeySegmentList
 
@@ -145,7 +145,7 @@ class AddConst (accd :: Symbol) (l :: KeySegmentList) (l' :: KeySegmentList) | a
 instance addConsNil :: AddConst "" l l
 else instance addConsNonNil :: AddConst c l (KC c :#: l)
 
-class WriteKeySegment (p :: KeySegment) (r :: # Type) where
+class WriteKeySegment (p :: KeySegment) (r :: Row Type) where
   writeKeySegment :: KeySegmentProxy p -> {|r} -> String
 
 instance writeKeySegmentConst ::
@@ -163,7 +163,7 @@ instance writeKeySegmentDyn ::
   writeKeySegment _ r =
     encodeDynKeySegment (Record.get (SProxy :: _ n) r)
 
-class ReadKeySegment (p :: KeySegment) (r1 :: # Type) (r2 :: # Type) | p -> r1 r2 where
+class ReadKeySegment (p :: KeySegment) (r1 :: Row Type) (r2 :: Row Type) | p -> r1 r2 where
   readKeySegment :: KeySegmentProxy p -> String -> Maybe { builder :: RecordBuilder.Builder {|r1} {|r2}, rest :: String }
 
 instance readKeySegmentConst ::
@@ -190,7 +190,7 @@ instance readKeySegmentDyn ::
     , rest
     }
 
-class MkKey (l :: KeySegmentList) (r :: # Type) | l -> r where
+class MkKey (l :: KeySegmentList) (r :: Row Type) | l -> r where
   mkKey' :: KeySegmentListProxy l -> {|r} -> String
 
 instance mkKeyNil ::
@@ -211,7 +211,7 @@ instance mkKeyCons1 ::
 mkKey :: forall s l r. ToKeySegmentList s l => MkKey l r => {|r} -> Key s
 mkKey r = Key $ mkKey' (kp :: _ l) r
 
-class ReadKey (l :: KeySegmentList) (r1 :: # Type) (r2 :: # Type) | l -> r1 r2 where
+class ReadKey (l :: KeySegmentList) (r1 :: Row Type) (r2 :: Row Type) | l -> r1 r2 where
   readKey' :: KeySegmentListProxy l -> String -> Maybe (RecordBuilder.Builder {|r1} {|r2})
 
 instance readKeyNil ::

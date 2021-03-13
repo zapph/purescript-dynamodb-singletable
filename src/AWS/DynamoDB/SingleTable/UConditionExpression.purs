@@ -59,8 +59,8 @@ import AWS.DynamoDB.SingleTable.Path (Path, mkPath, pathToString)
 import AWS.DynamoDB.SingleTable.Types (AttributeValue)
 import Data.Foldable (intercalate)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
 import Data.List.NonEmpty (NonEmptyList)
+import Data.Show.Generic (genericShow)
 import Data.Symbol (class IsSymbol)
 import Data.Traversable (traverse)
 
@@ -110,7 +110,7 @@ instance comparatorShow :: Show Comparator where
 -- can this be solved using Generic?
 
 -- Condition
-newtype CComp' l comp r = CComp' Condition
+newtype CComp' (l :: Type) (comp :: Type) (r :: Type) = CComp' Condition
 instance toValueCComp' :: ToValue (CComp' l comp r) Condition where
   toValue (CComp' c) = c
 
@@ -180,7 +180,7 @@ cgtEq ::
   CComp' l CompGtEq' r
 cgtEq = ccomp CompGtEq'
 
-newtype CBetween' op min max = CBetween' Condition
+newtype CBetween' (op :: Type) (min :: Type) (max :: Type) = CBetween' Condition
 instance toValueCBetween' :: ToValue (CBetween' op min max) Condition where
   toValue (CBetween' cond) = cond
 
@@ -195,7 +195,7 @@ between ::
 between op { min, max } =
   CBetween' $ CBetween (toValue op) { min: toValue min, max: toValue max }
 
-newtype CIn' op opts = CIn' Condition
+newtype CIn' (op :: Type) (opts :: Type) = CIn' Condition
 instance toValueCIn' ::
   ( ToValue op Operand
   , ToValueList1 opts Operand
@@ -211,7 +211,7 @@ cin ::
   CIn' op opts
 cin op opts = CIn' $ CIn (toValue op) (toValueList1 opts)
 
-newtype CAnd' l r = CAnd' Condition
+newtype CAnd' (l :: Type) (r :: Type) = CAnd' Condition
 instance toValueCAnd' :: ToValue (CAnd' l r) Condition where
   toValue (CAnd' cond) = cond
 
@@ -224,7 +224,7 @@ cand ::
   CAnd' l r
 cand l r = CAnd' $ CAnd (toValue l) (toValue r)
 
-newtype COr' l r = COr' Condition
+newtype COr' (l :: Type) (r :: Type) = COr' Condition
 instance toValueCOr' :: ToValue (COr' l r) Condition where
   toValue (COr' cond) = cond
 
@@ -237,7 +237,7 @@ cor ::
   COr' l r
 cor l r = COr' $ COr (toValue l) (toValue r)
 
-newtype CNot' c = CNot' Condition
+newtype CNot' (c :: Type) = CNot' Condition
 instance toValueCNot' :: ToValue (CNot' c) Condition where
   toValue (CNot' cond) = cond
 
@@ -276,7 +276,7 @@ attributeNotExists p =
   CAttributeNotExists' $ CAttributeNotExists (mkPath p)
 
 -- | CAttributeType Path Typ = Path Typ
-newtype CBeginsWith' p pfx = CBeginsWith' Condition
+newtype CBeginsWith' (p :: Type) (pfx :: Type) = CBeginsWith' Condition
 
 instance toValueCBeginsWith' :: ToValue (CBeginsWith' p pfx) Condition where
   toValue (CBeginsWith' cond) = cond
@@ -290,7 +290,7 @@ beginsWith ::
   CBeginsWith' p pfx
 beginsWith p pfx = CBeginsWith' $ CBeginsWith (toValue p) (toValue pfx)
 
-newtype CContains' (p :: Symbol) op = CContains' Condition
+newtype CContains' (p :: Symbol) (op :: Type) = CContains' Condition
 
 instance toValueCContains' :: ToValue (CContains' s op) Condition where
   toValue (CContains' cond) = cond
@@ -318,7 +318,7 @@ opath ::
   OPath' p
 opath p = OPath' $ OPath (mkPath p)
 
-newtype OValue' v = OValue' Operand
+newtype OValue' (v :: Type) = OValue' Operand
 instance toValueOValue' :: ToValue (OValue' v) Operand where
   toValue (OValue' o) = o
 

@@ -25,7 +25,7 @@ class
   ( IsSymbolMaybe indexName
   , IsSymbol pkName
   , IsSymbol skName
-  ) <= IsIndex a (indexName :: SymbolMaybe) (pkName :: Symbol) (skName :: Symbol) | a -> indexName pkName skName
+  ) <= IsIndex (a :: Type) (indexName :: SymbolMaybe) (pkName :: Symbol) (skName :: Symbol) | a -> indexName pkName skName
 
 instance isIndexPrimary :: IsIndex PrimaryIndex SMNothing "pk" "sk"
 instance isIndexGsi1 :: IsIndex Gsi1 (SMJust "gsi1") "gsi1pk" "gsi1sk"
@@ -57,6 +57,6 @@ skName ::
 skName _ =
   reflectSymbol (SProxy :: _ skName)
 
-class IndexValue a
+class IndexValue (a :: Type)
 instance indexValueString :: IndexValue String
 instance indexValueMaybeString :: IndexValue (Maybe String)

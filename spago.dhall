@@ -8,13 +8,12 @@
   , "foreign"
   , "foreign-object"
   , "formatters"
-  , "oneof"
   , "profunctor-lenses"
   , "record"
   , "rio"
   , "psci-support"
   , "spec"
-  , "typelevel-peano"
+  , "untagged-union"
   , "variant"
   ]
 , packages = ./packages.dhall

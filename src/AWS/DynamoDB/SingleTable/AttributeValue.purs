@@ -5,7 +5,7 @@ import Prelude
 import AWS.DynamoDB.SingleTable.Base64Encoded (Base64Encoded)
 import AWS.DynamoDB.SingleTable.Types (AttributeValue)
 import Data.DateTime (DateTime)
-import Data.Either (fromRight, hush)
+import Data.Either (fromRight', hush)
 import Data.FoldableWithIndex (forWithIndex_)
 import Data.Formatter.DateTime (Formatter, format, parseFormatString, unformat)
 import Data.Int as Int
@@ -19,9 +19,9 @@ import Data.Variant (Variant, case_, on)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Foreign.Object.ST as STObject
-import Partial.Unsafe (unsafePartial)
+import Partial.Unsafe (unsafeCrashWith, unsafePartial)
 import Prim.Row as Row
-import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
+import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Record as Record
 import Record.Builder as RB
 import Type.Row.Homogeneous (class Homogeneous)
@@ -253,7 +253,7 @@ instance avCodecInt :: AVCodec Int where
 
 iso8601Ms :: Formatter
 iso8601Ms =
-  unsafePartial $ fromRight $ parseFormatString "YYYY-MM-DDTHH:mm:ss.SSSZ"
+  fromRight' (\_ -> unsafeCrashWith "invalid format") $ parseFormatString "YYYY-MM-DDTHH:mm:ss.SSSZ"
 
 instance avCodecDateTime :: AVCodec DateTime where
   readAV = hush <<< unformat iso8601Ms <=< readAV
@@ -301,7 +301,7 @@ instance itemCodecVariant ::
   readItem = readItemVariantRL (RLProxy :: _ rl)
   writeItem' = writeItemVariantRL (RLProxy :: _ rl)
 
-class ItemCodecRL (rl :: RowList) (r1 :: # Type) (r2 :: # Type) (r1' :: # Type) (r2' :: # Type) (r :: # Type) | rl -> r1 r2 r1' r2' r where
+class ItemCodecRL (rl :: RowList Type) (r1 :: Row Type) (r2 :: Row Type) (r1' :: Row Type) (r2' :: Row Type) (r :: Row Type) | rl -> r1 r2 r1' r2' r where
   readItemRL :: RLProxy rl -> Item -> Maybe (RB.Builder {|r1} {|r2})
   writeItemRL :: RLProxy rl -> {|r} -> RB.Builder {|r1'} {|r2'}
 
@@ -355,7 +355,7 @@ else instance itemValueCodecDirect :: AVCodec a => ItemValueCodec a where
 
   writeItemValue = Just <<< writeAV
 
-class ItemCodecVariantRL (rl :: RowList) (r :: # Type) | rl -> r where
+class ItemCodecVariantRL (rl :: RowList Type) (r :: Row Type) | rl -> r where
   readItemVariantRL :: RLProxy rl -> Item -> Maybe (Variant r)
   writeItemVariantRL :: RLProxy rl -> Variant r -> Item'
 

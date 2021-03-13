@@ -47,13 +47,13 @@ import Data.Symbol (class IsSymbol, SProxy)
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html
 
-data UpdateAction r =
+data UpdateAction (r :: Type) =
   UASet (SetValueE r)
   | UARemove
   | UAAdd AttributeValue
   | UADelete AttributeValue
 
-newtype Update r a = Update (State (Map (Path r) (UpdateAction r)) a)
+newtype Update (r :: Type) (a :: Type) = Update (State (Map (Path r) (UpdateAction r)) a)
 
 derive newtype instance updateFunctor :: Functor (Update r)
 derive newtype instance updateApply :: Apply (Update r)
@@ -87,7 +87,7 @@ buildParams (Update u) =
     else Just expr
 
   where
-    actionMap = execState u mempty
+    actionMap = execState u Map.empty
 
     as = forWithIndex_ actionMap \path a -> do
       nameStr <- addPath path
@@ -175,7 +175,7 @@ setValueMinus = SVMinus
 
 type SetValueE r = Exists (SetValue r)
 
-data Operand r v =
+data Operand (r :: Type) (v :: Type) =
   OPath (Path r)
   | OValue AttributeValue
   | OIfNotExists (Path r) (Operand r v)
@@ -217,7 +217,7 @@ opListAppend ::
   Operand r (Array v)
 opListAppend = OListAppend
 
-class Settable typ v | typ -> v
+class Settable (typ :: Type) (v :: Type) | typ -> v
 
 instance settableMaybe :: Settable (Maybe v) v
 else instance settableDirect :: Settable typ typ
@@ -263,7 +263,7 @@ setOrRemove ::
 setOrRemove sp Nothing = remove sp
 setOrRemove sp (Just v) = set_ sp v
 
-class Addable typ addend | typ -> addend
+class Addable (typ :: Type) (addend :: Type) | typ -> addend
 instance addableNumber :: Addable Number Number
 instance addableMaybeNumber :: Addable (Maybe Number) Number
 instance addableSet :: Addable (Set v) (Set v)
@@ -280,7 +280,7 @@ add ::
   Update r Unit
 add sp v = addAction sp (UAAdd (writeAV v))
 
-class Deletable typ set | typ -> set
+class Deletable (typ :: Type) (set :: Type) | typ -> set
 
 instance deletableSet :: Deletable (Set v) (Set v)
 instance deletableMaybeSet :: Deletable (Maybe (Set v)) (Set v)
