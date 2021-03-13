@@ -20,11 +20,12 @@ import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd)
 import AWS.DynamoDB.SingleTable.ConditionExpression as CE
 import AWS.DynamoDB.SingleTable.Index (class IsIndex, indexName)
+import AWS.DynamoDB.SingleTable.Internal (class HasPath)
 import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
 import AWS.DynamoDB.SingleTable.QueryFilter (class QueryFilter)
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
-import AWS.DynamoDB.SingleTable.Types (class HasPath, class HasSingleTableDb, AVObject(..), AttributeValue, LastEvaluatedKey(..), PrimaryKey, SingleTableDb(..), dbL)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, LastEvaluatedKey(..), PrimaryKey, SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, LastEvaluatedKey, PrimaryKey, dbL) as E
 import AWS.DynamoDB.SingleTable.UConditionExpression as U
 import AWS.DynamoDB.SingleTable.UpdateExpression as UE

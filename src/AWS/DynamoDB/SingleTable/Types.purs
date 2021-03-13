@@ -8,7 +8,6 @@ module AWS.DynamoDB.SingleTable.Types
        , AttributeValue
        , AVObject(..)
        , Path
-       , class HasPath
        , spToPath
        , pathToString
        , LastEvaluatedKey(..)
@@ -17,11 +16,10 @@ module AWS.DynamoDB.SingleTable.Types
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.Internal (jsonStringify, objEqual)
+import AWS.DynamoDB.SingleTable.Internal (class HasPath, jsonStringify, objEqual)
 import Data.Lens (Lens')
 import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
 import Foreign.Object (Object)
-import Prim.Row as Row
 
 foreign import data AWSDynamoDb :: Type
 
@@ -57,16 +55,11 @@ class HasSingleTableDb env where
 instance hasSingleTableDbId :: HasSingleTableDb SingleTableDb where
   dbL = identity
 
+-- TODO deprecated
 newtype Path a = Path String
 
 derive newtype instance pathEq :: Eq (Path r)
 derive newtype instance pathOrd :: Ord (Path r)
-
-class HasPath (k :: Symbol) v a | k a -> v
-
-instance hasPathRecord ::
-  Row.Cons k v _r r =>
-  HasPath k v {|r}
 
 newtype LastEvaluatedKey index = LastEvaluatedKey AttributeValue
 

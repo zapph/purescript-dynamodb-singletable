@@ -8,6 +8,8 @@ module AWS.DynamoDB.SingleTable.Internal
        , class Filter
        , class IsSubset
        , class IsSubsetRl
+       , class HasPath'
+       , class HasPath
        ) where
 
 import Prelude
@@ -72,3 +74,17 @@ else instance isSubsetRlMatch ::
 else instance isSubsetRlSkip ::
   IsSubsetRl pTl (Cons k2 v2 subTl) r =>
   IsSubsetRl (Cons k1 v1 pTl) (Cons k2 v2 subTl) r
+
+class HasPath (k :: Symbol) v a | k a -> v
+
+--instance hasPathI :: HasPath' k v a True => HasPath k v a
+instance hasPathI :: Row.Cons k v _r r => HasPath k v {|r}
+
+class HasPath' (k :: Symbol) v a (hasPath :: Boolean) | k a -> v hasPath
+
+instance hasPathI' ::
+  ( RowToList r rl
+  , IsSubsetRl rl (Cons k v Nil) isSubset
+  ) => HasPath' k v {|r} isSubset
+else instance hasPathNonRec' ::
+  HasPath' k v a False

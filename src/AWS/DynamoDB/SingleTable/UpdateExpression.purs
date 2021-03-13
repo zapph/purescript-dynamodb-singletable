@@ -27,7 +27,8 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
-import AWS.DynamoDB.SingleTable.Types (class HasPath, AttributeValue, Path, pathToString, spToPath)
+import AWS.DynamoDB.SingleTable.Internal (class HasPath)
+import AWS.DynamoDB.SingleTable.Types (AttributeValue, Path, pathToString, spToPath)
 import Control.Monad.State (class MonadState, State, StateT, execState, execStateT)
 import Control.Monad.State.Class (modify_)
 import Control.Monad.Trans.Class (lift)

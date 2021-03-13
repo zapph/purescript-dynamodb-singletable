@@ -33,7 +33,8 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class AVCodec, avS, writeAV)
 import AWS.DynamoDB.SingleTable.CommandBuilder (CommandBuilder)
 import AWS.DynamoDB.SingleTable.CommandBuilder as CB
-import AWS.DynamoDB.SingleTable.Types (class HasPath, AttributeValue, Path, pathToString, spToPath)
+import AWS.DynamoDB.SingleTable.Internal (class HasPath)
+import AWS.DynamoDB.SingleTable.Types (AttributeValue, Path, pathToString, spToPath)
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
@@ -181,23 +182,23 @@ instance containableString :: Containable String
 instance containableMaybeString :: Containable (Maybe String)
 
 cContains ::
-  forall r _r k v c.
+  forall r k v c.
   CanContain v =>
   Containable c =>
-  Row.Cons k v _r r =>
+  HasPath k v r =>
   IsSymbol k =>
   SProxy k ->
-  Operand {|r} c ->
-  Condition {|r}
+  Operand r c ->
+  Condition r
 cContains sp op =
   CContains (spToPath sp) (mkExists op)
 
 opPath ::
-  forall path v _r r.
+  forall path v r.
   IsSymbol path =>
-  Row.Cons path v _r r =>
+  HasPath path v r =>
   SProxy path ->
-  Operand {|r} v
+  Operand r v
 opPath = OPath <<< spToPath
 
 opValue ::
