@@ -26,11 +26,11 @@ else instance getItemFilterNonRecord ::
   Filter (GetItem pk sk) {|r} False
 
 getItem' ::
-  forall env s pks sks opts.
+  forall env pNdx s pks sks opts.
   HasSingleTableDb env =>
   ItemCodec (Variant opts) =>
   FilterRows (GetItem (Key pks) (Key sks)) s opts =>
-  Repo (Variant s) ->
+  Repo pNdx (Variant s) ->
   { pk :: Key pks, sk :: Key sks } ->
   RIO env (Maybe (Variant opts))
 getItem' repo p = S.getItem (mkRepo :: _ (Variant opts)) -- cheat
@@ -39,12 +39,12 @@ getItem' repo p = S.getItem (mkRepo :: _ (Variant opts)) -- cheat
   }
 
 getItem ::
-  forall env s pks sks opts v.
+  forall env pNdx s pks sks opts v.
   HasSingleTableDb env =>
   ItemCodec (Variant opts) =>
   FilterRows (GetItem (Key pks) (Key sks)) s opts =>
   On1 opts v =>
-  Repo (Variant s) ->
+  Repo pNdx (Variant s) ->
   { pk :: Key pks, sk :: Key sks } ->
   RIO env (Maybe v)
 getItem repo keyPair =

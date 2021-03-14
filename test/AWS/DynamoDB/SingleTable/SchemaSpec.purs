@@ -5,7 +5,7 @@ import Prelude
 
 import AWS.DynamoDB.SingleTable (Repo, mkRepo, query)
 import AWS.DynamoDB.SingleTable.DynKeySegment (DynKeySegment, normalizedDynKeySegment)
-import AWS.DynamoDB.SingleTable.Index (PrimaryIndex(..))
+import AWS.DynamoDB.SingleTable.Index (PkSk, PrimaryIndex(..))
 import AWS.DynamoDB.SingleTable.Key (Key, mkKey)
 import AWS.DynamoDB.SingleTable.Path (Path'(..))
 import AWS.DynamoDB.SingleTable.Schema (getItem)
@@ -66,7 +66,7 @@ type Schema =
   , "orderItem" :: OrderItem
   )
 
-repo :: Repo (Variant Schema)
+repo :: Repo (PkSk "pk" "sk") (Variant Schema)
 repo = mkRepo
 
 getUserSample :: forall env. HasSingleTableDb env => RIO env (Maybe User)

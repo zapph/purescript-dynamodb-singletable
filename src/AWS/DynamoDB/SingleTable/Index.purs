@@ -1,5 +1,7 @@
 module AWS.DynamoDB.SingleTable.Index
-       ( class IsIndex
+       ( Index
+       , PkSk
+       , class IsIndex
        , indexName
        , pkName
        , skName
@@ -16,6 +18,10 @@ import AWS.DynamoDB.SingleTable.Internal.SymbolUtils (class IsSymbolMaybe, refle
 import Data.Maybe (Maybe)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Type.Proxy (Proxy(..))
+
+data Index
+--foreign import data Pk :: Symbol -> Index
+foreign import data PkSk :: Symbol -> Symbol -> Index
 
 data PrimaryIndex = PrimaryIndex
 data Gsi1 = Gsi1
