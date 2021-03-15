@@ -40,9 +40,10 @@ import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
 import Data.Maybe (Maybe)
 import Data.Set.NonEmpty (NonEmptySet)
-import Data.Symbol (class IsSymbol, SProxy(..))
+import Data.Symbol (class IsSymbol)
 import Data.Traversable (traverse)
 import Prim.Row as Row
+import Type.Proxy (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html
@@ -125,19 +126,19 @@ cNot :: forall r. Condition r -> Condition r
 cNot = CNot
 
 cAttributeExists ::
-  forall r k v.
+  forall r proxy k v.
   IsSymbol k =>
   HasPath k v r =>
-  SProxy k ->
+  proxy k ->
   Condition r
 cAttributeExists sp =
   CAttributeExists (spToPath sp)
 
 cAttributeNotExists ::
-  forall k pk r.
+  forall proxy k pk r.
   HasPath k pk r =>
   IsSymbol k =>
-  SProxy k ->
+  proxy k ->
   Condition r
 cAttributeNotExists sp =
   CAttributeNotExists (spToPath sp)
@@ -147,25 +148,25 @@ cItemExists ::
   HasPath "pk" pk r =>
   Condition r
 cItemExists =
-  cAttributeExists (SProxy :: _ "pk")
+  cAttributeExists (Proxy :: _ "pk")
 
 cItemNotExists ::
   forall pk r.
   HasPath "pk" pk r =>
   Condition r
 cItemNotExists =
-  cAttributeNotExists (SProxy :: _ "pk")
+  cAttributeNotExists (Proxy :: _ "pk")
 
 class CanBeginWith (a :: Type)
 instance canBeginWithString :: CanBeginWith String
 instance canBeginWithMaybe :: CanBeginWith a => CanBeginWith (Maybe a)
 
 cBeginsWith ::
-  forall r _r k v.
+  forall r _r proxy k v.
   CanBeginWith v =>
   Row.Cons k v _r r =>
   IsSymbol k =>
-  SProxy k ->
+  proxy k ->
   String ->
   Condition {|r}
 cBeginsWith sp substring =
@@ -182,22 +183,22 @@ instance containableString :: Containable String
 instance containableMaybeString :: Containable (Maybe String)
 
 cContains ::
-  forall r k v c.
+  forall r proxy k v c.
   CanContain v =>
   Containable c =>
   HasPath k v r =>
   IsSymbol k =>
-  SProxy k ->
+  proxy k ->
   Operand r c ->
   Condition r
 cContains sp op =
   CContains (spToPath sp) (mkExists op)
 
 opPath ::
-  forall path v r.
+  forall proxy path v r.
   IsSymbol path =>
   HasPath path v r =>
-  SProxy path ->
+  proxy path ->
   Operand r v
 opPath = OPath <<< spToPath
 

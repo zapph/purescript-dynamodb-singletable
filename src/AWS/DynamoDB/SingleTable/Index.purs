@@ -16,7 +16,7 @@ module AWS.DynamoDB.SingleTable.Index
 import AWS.DynamoDB.SingleTable.Internal (Just', Nothing')
 import AWS.DynamoDB.SingleTable.Internal.SymbolUtils (class IsSymbolMaybe, reflectSymbolMaybe)
 import Data.Maybe (Maybe)
-import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol)
 import Type.Proxy (Proxy(..))
 
 data Index
@@ -55,7 +55,7 @@ pkName ::
   a ->
   String
 pkName _ =
-  reflectSymbol (SProxy :: _ pkName)
+  reflectSymbol (Proxy :: _ pkName)
 
 skName ::
   forall a indexName pkName skName.
@@ -63,7 +63,7 @@ skName ::
   a ->
   String
 skName _ =
-  reflectSymbol (SProxy :: _ skName)
+  reflectSymbol (Proxy :: _ skName)
 
 class IndexValue (a :: Type)
 instance indexValueString :: IndexValue String

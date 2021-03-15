@@ -20,13 +20,13 @@ module AWS.DynamoDB.SingleTable.Internal
 import Prelude
 
 import Data.Maybe (Maybe)
-import Data.Symbol (class IsSymbol, SProxy(..))
+import Data.Symbol (class IsSymbol)
 import Data.Variant (Variant, case_, on)
 import Prim.Boolean (False, True)
 import Prim.Row as Row
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Type.Data.Boolean (class If)
-import Type.Row (RProxy)
+import Type.Proxy (Proxy(..))
 
 foreign import jsonStringify :: forall a. a -> String
 foreign import objEqual :: forall a. a -> a -> Boolean
@@ -48,7 +48,7 @@ instance on1I ::
   , Row.Cons k v () r
   , IsSymbol k
   ) => On1 r v where
-  on1 = case_ # on (SProxy :: _ k) identity
+  on1 = case_ # on (Proxy :: _ k) identity
 
 class FilterRows (filter :: Type) (r :: Row Type) (o :: Row Type) | filter r -> o
 
@@ -66,7 +66,7 @@ instance filterRowsCons ::
   ( FilterRowsRl filter tl tlOpts
   , Filter filter a isIncluded
   , Row.Cons k a tlOpts ifMatch
-  , If isIncluded (RProxy ifMatch) (RProxy tlOpts) (RProxy opts)
+  , If isIncluded ifMatch tlOpts opts
   ) => FilterRowsRl filter (Cons k a tl) opts
 
 class Filter (filter :: Type) (a :: Type) (isIncluded :: Boolean) | filter a -> isIncluded

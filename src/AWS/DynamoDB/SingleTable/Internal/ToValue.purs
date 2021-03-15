@@ -6,16 +6,17 @@ import Prelude
 import Data.List (List(..))
 import Data.List.NonEmpty (NonEmptyList)
 import Data.List.NonEmpty as NonEmptyList
-import Data.Symbol (class IsSymbol, SProxy)
+import Data.Symbol (class IsSymbol)
 import Data.Tuple.Nested (type (/\), (/\))
 import Type.Data.Symbol (reflectSymbol)
+import Type.Proxy (Proxy)
 
 class ToValue s a | s -> a where
   toValue :: s -> a
 
 instance toValueSymbol' ::
   IsSymbol s =>
-  ToValue (SProxy s) String where
+  ToValue (Proxy s) String where
 
   toValue sp = reflectSymbol sp
 

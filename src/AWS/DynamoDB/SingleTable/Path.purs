@@ -8,7 +8,8 @@ module AWS.DynamoDB.SingleTable.Path
 import Prelude
 
 import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
-import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol)
+import Type.Proxy (Proxy(..))
 
 newtype Path = Path String
 
@@ -17,7 +18,7 @@ mkPath ::
   IsSymbol p =>
   proxy p ->
   Path
-mkPath _ = Path (reflectSymbol (SProxy :: _ p))
+mkPath _ = Path (reflectSymbol (Proxy :: _ p))
 
 derive instance pathEq :: Eq Path
 derive instance pathOrd :: Ord Path

@@ -39,12 +39,13 @@ import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
 import Control.MonadPlus (guard)
 import Data.Maybe (Maybe(..))
 import Data.String as String
-import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol)
 import Prim.Row as Row
 import Prim.Symbol as Symbol
 import Prim.TypeError (class Fail, Text)
 import Record as Record
 import Record.Builder as RecordBuilder
+import Type.Proxy (Proxy(..))
 
 newtype Key (s :: Symbol) = Key String
 
@@ -152,7 +153,7 @@ instance writeKeySegmentConst ::
   IsSymbol s =>
   WriteKeySegment (KC s) r where
 
-  writeKeySegment _ _ = reflectSymbol (SProxy :: _ s)
+  writeKeySegment _ _ = reflectSymbol (Proxy :: _ s)
 
 instance writeKeySegmentDyn ::
   ( IsSymbol n
@@ -161,7 +162,7 @@ instance writeKeySegmentDyn ::
   ) => WriteKeySegment (KD n t) r where
 
   writeKeySegment _ r =
-    encodeDynKeySegment (Record.get (SProxy :: _ n) r)
+    encodeDynKeySegment (Record.get (Proxy :: _ n) r)
 
 class ReadKeySegment (p :: KeySegment) (r1 :: Row Type) (r2 :: Row Type) | p -> r1 r2 where
   readKeySegment :: KeySegmentProxy p -> String -> Maybe { builder :: RecordBuilder.Builder {|r1} {|r2}, rest :: String }
@@ -171,7 +172,7 @@ instance readKeySegmentConst ::
   ReadKeySegment (KC s) r r where
 
   readKeySegment _ s =
-    let c = reflectSymbol (SProxy :: _ s)
+    let c = reflectSymbol (Proxy :: _ s)
     in case String.splitAt (String.length c) s of
       { before, after } | before == c ->
         Just { builder: identity, rest: after }
@@ -186,7 +187,7 @@ instance readKeySegmentDyn ::
   ) => ReadKeySegment (KD n t) r1 r2 where
 
   readKeySegment _ s = decodeDynKeySegment s <#> \{ a, rest } ->
-    { builder: RecordBuilder.insert (SProxy :: _ n) a
+    { builder: RecordBuilder.insert (Proxy :: _ n) a
     , rest
     }
 

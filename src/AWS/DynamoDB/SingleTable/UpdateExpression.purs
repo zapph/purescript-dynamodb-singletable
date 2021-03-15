@@ -42,7 +42,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Set (Set)
 import Data.String as String
-import Data.Symbol (class IsSymbol, SProxy)
+import Data.Symbol (class IsSymbol)
 
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
 -- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html
@@ -185,10 +185,10 @@ data Operand (r :: Type) (v :: Type) =
   | OListAppend (Operand r v) (Operand r v)
 
 opPath ::
-  forall path v r.
+  forall proxy path v r.
   IsSymbol path =>
   HasPath path v r =>
-  SProxy path ->
+  proxy path ->
   Operand r v
 opPath = OPath <<< spToPath
 
@@ -200,11 +200,11 @@ opValue ::
 opValue = OValue <<< writeAV
 
 opIfNotExists ::
-  forall path v r typ.
+  forall proxy path v r typ.
   HasPath path v r =>
   Settable typ v =>
   IsSymbol path =>
-  SProxy path ->
+  proxy path ->
   Operand r v ->
   Operand r v
 opIfNotExists sp else' =
@@ -223,41 +223,41 @@ instance settableMaybe :: Settable (Maybe v) v
 else instance settableDirect :: Settable typ typ
 
 set ::
-  forall r k typ v.
+  forall r proxy k typ v.
   IsSymbol k =>
   HasPath k typ r =>
   Settable typ v =>
   AVCodec v =>
-  SProxy k ->
+  proxy k ->
   SetValue r v ->
   Update r Unit
 set sp sv = addAction sp (UASet (mkExists sv))
 
 set_ ::
-  forall r k typ v.
+  forall r proxy k typ v.
   IsSymbol k =>
   HasPath k typ r =>
   Settable typ v =>
   AVCodec v =>
-  SProxy k ->
+  proxy k ->
   v ->
   Update r Unit
 set_ sp = set sp <<< setValue
 
 remove ::
-  forall r k v.
+  forall r proxy k v.
   IsSymbol k =>
   HasPath k (Maybe v) r =>
-  SProxy k ->
+  proxy k ->
   Update r Unit
 remove sp = addAction sp UARemove
 
 setOrRemove ::
-  forall r k v.
+  forall r proxy k v.
   IsSymbol k =>
   HasPath k (Maybe v) r =>
   AVCodec v =>
-  SProxy k ->
+  proxy k ->
   Maybe v ->
   Update r Unit
 setOrRemove sp Nothing = remove sp
@@ -270,12 +270,12 @@ instance addableSet :: Addable (Set v) (Set v)
 instance addableMaybeSet :: Addable (Maybe (Set v)) (Set v)
 
 add ::
-  forall r k typ addend.
+  forall r sproxy k typ addend.
   IsSymbol k =>
   HasPath k typ r =>
   Addable typ addend =>
   AVCodec addend =>
-  SProxy k ->
+  sproxy k ->
   addend ->
   Update r Unit
 add sp v = addAction sp (UAAdd (writeAV v))
@@ -286,22 +286,22 @@ instance deletableSet :: Deletable (Set v) (Set v)
 instance deletableMaybeSet :: Deletable (Maybe (Set v)) (Set v)
 
 delete ::
-  forall r k v typ set.
+  forall r proxy k v typ set.
   IsSymbol k =>
   HasPath k v r =>
   Deletable typ set =>
   AVCodec set =>
-  SProxy k ->
+  proxy k ->
   set ->
   Update r Unit
 delete sp v = addAction sp (UADelete (writeAV v))
 
 addAction ::
-  forall r k typ v.
+  forall r proxy k typ v.
   IsSymbol k =>
   HasPath k typ r =>
   Settable typ v =>
-  SProxy k ->
+  proxy k ->
   UpdateAction r ->
   Update r Unit
 addAction sp a =

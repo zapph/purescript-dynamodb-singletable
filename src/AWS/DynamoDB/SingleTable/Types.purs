@@ -18,7 +18,7 @@ import Prelude
 
 import AWS.DynamoDB.SingleTable.Internal (class HasPath, jsonStringify, objEqual)
 import Data.Lens (Lens')
-import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol)
 import Foreign.Object (Object)
 
 foreign import data AWSDynamoDb :: Type
@@ -66,10 +66,10 @@ newtype LastEvaluatedKey (index :: Type) = LastEvaluatedKey AttributeValue
 -- TODO add haspath for variant
 
 spToPath ::
-  forall k v r.
+  forall proxy k v r.
   IsSymbol k =>
   HasPath k v r =>
-  SProxy k ->
+  proxy k ->
   Path r
 spToPath = Path <<< reflectSymbol
 

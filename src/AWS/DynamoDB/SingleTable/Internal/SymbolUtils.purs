@@ -15,7 +15,7 @@ module AWS.DynamoDB.SingleTable.Internal.SymbolUtils
 import AWS.DynamoDB.SingleTable.Internal (Cons', Just', List', Nil', Nothing')
 import Data.List (List(..))
 import Data.Maybe (Maybe(..))
-import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol)
 import Prim.Boolean (False, True)
 import Prim.Ordering (EQ, Ordering)
 import Prim.Symbol as Symbol
@@ -31,7 +31,7 @@ instance isSymbolMaybeNothing ::
 instance isSymbolMaybeJust ::
   IsSymbol s =>
   IsSymbolMaybe (Just' s) where
-  reflectSymbolMaybe _ = Just (reflectSymbol (SProxy :: _ s))
+  reflectSymbolMaybe _ = Just (reflectSymbol (Proxy :: _ s))
 
 class IsSymbolList (l :: List') where
   reflectSymbolList :: forall f. f l -> List String
@@ -45,7 +45,7 @@ instance isSymbolListJust ::
   , IsSymbolList tl
   ) =>
   IsSymbolList (Cons' h tl) where
-  reflectSymbolList _ = Cons (reflectSymbol (SProxy :: _ h)) (reflectSymbolList (Proxy :: _ tl))
+  reflectSymbolList _ = Cons (reflectSymbol (Proxy :: _ h)) (reflectSymbolList (Proxy :: _ tl))
 
 class IsCharUpper (c :: Symbol)
 

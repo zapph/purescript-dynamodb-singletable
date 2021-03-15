@@ -14,7 +14,7 @@ import Data.Maybe (Maybe(..), fromJust)
 import Data.Number as Number
 import Data.Set.NonEmpty (NonEmptySet)
 import Data.Set.NonEmpty as NonEmptySet
-import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Traversable (for, traverse)
 import Data.Variant (Variant, case_, expand, inj, on)
 import Foreign.Object (Object)
@@ -27,7 +27,6 @@ import Record as Record
 import Record.Builder as RB
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
-import Type.RowList (RLProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
 -- B
@@ -288,11 +287,11 @@ instance itemCodecR
             )
             => ItemCodec {|r} where
   readItem item =
-    readItemRL (RLProxy :: _ rl) item <#>
+    readItemRL (Proxy :: _ rl) item <#>
     \b -> RB.build b {}
   writeItem' a = Object.fromHomogeneous r
     where
-      r = RB.build (writeItemRL (RLProxy :: _ rl) a) {}
+      r = RB.build (writeItemRL (Proxy :: _ rl) a) {}
 
 instance itemCodecVariant ::
   ( RowToList r rl
@@ -300,12 +299,12 @@ instance itemCodecVariant ::
   ) =>
   ItemCodec (Variant r) where
 
-  readItem = readItemVariantRL (RLProxy :: _ rl)
-  writeItem' = writeItemVariantRL (RLProxy :: _ rl)
+  readItem = readItemVariantRL (Proxy :: _ rl)
+  writeItem' = writeItemVariantRL (Proxy :: _ rl)
 
 class ItemCodecRL (rl :: RowList Type) (r1 :: Row Type) (r2 :: Row Type) (r1' :: Row Type) (r2' :: Row Type) (r :: Row Type) | rl -> r1 r2 r1' r2' r where
-  readItemRL :: RLProxy rl -> Item -> Maybe (RB.Builder {|r1} {|r2})
-  writeItemRL :: RLProxy rl -> {|r} -> RB.Builder {|r1'} {|r2'}
+  readItemRL :: Proxy rl -> Item -> Maybe (RB.Builder {|r1} {|r2})
+  writeItemRL :: Proxy rl -> {|r} -> RB.Builder {|r1'} {|r2'}
 
 instance itemCodecRLNil :: ItemCodecRL Nil () () () () r where
   readItemRL _ _ = Just identity
@@ -325,9 +324,9 @@ instance itemCodecRLCons
 
   readItemRL _ o = (<<<) <$> hBuilder <*> tlBuilder
     where
-      tlBuilder = readItemRL (RLProxy :: _ tl) o
+      tlBuilder = readItemRL (Proxy :: _ tl) o
 
-      sp = SProxy :: _ k
+      sp = Proxy :: _ k
       key = reflectSymbol sp
       av = Object.lookup key o
       v = readItemValue av :: Maybe v
@@ -335,9 +334,9 @@ instance itemCodecRLCons
 
   writeItemRL _ r = hBuilder <<< tlBuilder
     where
-      tlBuilder = writeItemRL (RLProxy :: _ tl) r
+      tlBuilder = writeItemRL (Proxy :: _ tl) r
 
-      sp = SProxy :: _ k
+      sp = Proxy :: _ k
       v = Record.get sp r
       av = writeItemValue v
       hBuilder = RB.insert sp av
@@ -358,8 +357,8 @@ else instance itemValueCodecDirect :: AVCodec a => ItemValueCodec a where
   writeItemValue = Just <<< writeAV
 
 class ItemCodecVariantRL (rl :: RowList Type) (r :: Row Type) | rl -> r where
-  readItemVariantRL :: RLProxy rl -> Item -> Maybe (Variant r)
-  writeItemVariantRL :: RLProxy rl -> Variant r -> Item'
+  readItemVariantRL :: Proxy rl -> Item -> Maybe (Variant r)
+  writeItemVariantRL :: Proxy rl -> Variant r -> Item'
 
 instance itemCodecVariantRLNil :: ItemCodecVariantRL Nil () where
   readItemVariantRL _ _ = Nothing
@@ -376,6 +375,6 @@ instance itemCodecVariantRLCons ::
 
   readItemVariantRL _ item =
     (inj (Proxy :: _ k) <$> readItem item)
-    <|> (expand <$> readItemVariantRL (RLProxy :: _ tl) item)
+    <|> (expand <$> readItemVariantRL (Proxy :: _ tl) item)
   writeItemVariantRL _ =
-    on (Proxy :: _ k) writeItem' (writeItemVariantRL (RLProxy :: _ tl))
+    on (Proxy :: _ k) writeItem' (writeItemVariantRL (Proxy :: _ tl))
