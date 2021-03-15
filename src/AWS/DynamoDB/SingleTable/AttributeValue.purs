@@ -4,6 +4,7 @@ import Prelude
 
 import AWS.DynamoDB.SingleTable.Base64Encoded (Base64Encoded)
 import AWS.DynamoDB.SingleTable.Types (AttributeValue)
+import Control.Alt ((<|>))
 import Data.DateTime (DateTime)
 import Data.Either (fromRight', hush)
 import Data.FoldableWithIndex (forWithIndex_)
@@ -15,7 +16,7 @@ import Data.Set.NonEmpty (NonEmptySet)
 import Data.Set.NonEmpty as NonEmptySet
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Traversable (for, traverse)
-import Data.Variant (Variant, case_, on)
+import Data.Variant (Variant, case_, expand, inj, on)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Foreign.Object.ST as STObject
@@ -24,6 +25,7 @@ import Prim.Row as Row
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Record as Record
 import Record.Builder as RB
+import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 import Type.RowList (RLProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
@@ -366,11 +368,14 @@ instance itemCodecVariantRLNil :: ItemCodecVariantRL Nil () where
 instance itemCodecVariantRLCons ::
   ( IsSymbol k
   , Row.Cons k a r' r
+  , Row.Union r' _t r
   , ItemCodecVariantRL tl r'
   , ItemCodec a
   ) =>
   ItemCodecVariantRL (Cons k v tl) r where
 
-  readItemVariantRL _ _ = Nothing
+  readItemVariantRL _ item =
+    (inj (Proxy :: _ k) <$> readItem item)
+    <|> (expand <$> readItemVariantRL (RLProxy :: _ tl) item)
   writeItemVariantRL _ =
-    on (SProxy :: _ k) writeItem' (writeItemVariantRL (RLProxy :: _ tl))
+    on (Proxy :: _ k) writeItem' (writeItemVariantRL (RLProxy :: _ tl))
