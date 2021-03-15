@@ -4,7 +4,7 @@ module AWS.DynamoDB.SingleTable
        , getItem
        , deleteItem
        , putItem
-       , updateItem
+--       , updateItem
        , transactWriteItems
        , query
        , Repo
@@ -17,23 +17,24 @@ import Prelude
 import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, readItem, writeItem)
 import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
-import AWS.DynamoDB.SingleTable.ConditionExpression (Condition, cAnd)
-import AWS.DynamoDB.SingleTable.ConditionExpression as CE
+import AWS.DynamoDB.SingleTable.GetItemFilter (GetItem)
 import AWS.DynamoDB.SingleTable.Index (class IsIndex, Index, indexName)
-import AWS.DynamoDB.SingleTable.Internal (class HasPath)
+import AWS.DynamoDB.SingleTable.Internal (class FilterRows)
 import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
-import AWS.DynamoDB.SingleTable.QueryFilter (class QueryFilter)
+import AWS.DynamoDB.SingleTable.Key (Key, printKey)
+import AWS.DynamoDB.SingleTable.QueryFilter (class QueryFilter, class SimplifyVariant)
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, LastEvaluatedKey(..), PrimaryKey, SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, LastEvaluatedKey, PrimaryKey, dbL) as E
+import AWS.DynamoDB.SingleTable.UConditionExpression (Condition, buildCondition)
 import AWS.DynamoDB.SingleTable.UConditionExpression as U
-import AWS.DynamoDB.SingleTable.UpdateExpression as UE
 import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
 import Data.Lens (view)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..))
 import Data.Traversable (sequence, traverse)
+import Data.Variant (Variant)
 import Effect (Effect)
 import Effect.Aff (throwError)
 import Effect.Exception (Error, error)
@@ -51,30 +52,32 @@ mkSingleTableDb table =
   Db { dynamodb, table }
 
 getItem ::
-  forall env pNdx a.
+  forall env pNdx items pks sks items' out.
   HasSingleTableDb env =>
-  ItemCodec a =>
-  Repo pNdx a ->
-  PrimaryKey ->
-  RIO env (Maybe a)
-getItem _ { pk, sk } = do
+  ItemCodec out =>
+  FilterRows (GetItem (Key pks) (Key sks)) items items' =>
+  SimplifyVariant items' out =>
+  Repo pNdx items ->
+  { pk :: Key pks, sk :: Key sks } ->
+  RIO env (Maybe out)
+getItem repo { pk, sk } = do
   table <- getTable
   res <- Cl.getItem
     { "Key": AVObject $ Object.fromHomogeneous
-        { "pk": avS pk
-        , "sk": avS sk
+        { "pk": avS (printKey pk)
+        , "sk": avS (printKey sk)
         }
     , "TableName": table
     }
   traverse readItemOrErr (uorToMaybe (res."Item"))
 
 deleteItem ::
-  forall env pNdx a.
+  forall env pNdx items.
   HasSingleTableDb env =>
-  ItemCodec a =>
-  Repo pNdx a ->
+  ItemCodec (Variant items) =>
+  Repo pNdx items ->
   PrimaryKey ->
-  RIO env (Maybe a)
+  RIO env (Maybe (Variant items))
 deleteItem _ { pk, sk } = do
   table <- getTable
   res <- Cl.deleteItem
@@ -103,30 +106,37 @@ transactWriteItems opsFs = do
       }
   pure unit
 
+{-
 insertItem ::
-  forall env pk pNdx a.
+  forall env pk pNdx items cond.
   HasSingleTableDb env =>
-  ItemCodec a =>
-  HasPath "pk" pk a =>
-  Repo pNdx a ->
-  a ->
-  (Maybe (Condition a)) ->
-  RIO env (Maybe a)
-insertItem repo item conditionExprF = putItem repo { item, returnOld: false } (Just finalKeyConditionF)
+  ItemCodec (Variant items) =>
+  ToValue cond Condition =>
+--  HasPath "pk" pk a =>
+  Repo pNdx items ->
+  Variant items ->
+  Maybe cond ->
+  RIO env (Maybe (Variant items))
+insertItem repo item conditionExprF =
+  putItem repo { item, returnOld: false } (Just finalKeyConditionF)
   where
   finalKeyConditionF =
-    maybe CE.cItemNotExists (_ `cAnd` CE.cItemNotExists) conditionExprF
+    maybe
+    ?foo
+    --maybe CE.cItemNotExists (_ `cAnd` CE.cItemNotExists) conditionExprF
+-}
 
 putItem ::
-  forall env pNdx a.
+  forall env pNdx items cond.
   HasSingleTableDb env =>
-  ItemCodec a =>
-  Repo pNdx a ->
-  { item :: a
+  ItemCodec (Variant items) =>
+  ToValue cond Condition =>
+  Repo pNdx items ->
+  { item :: Variant items
   , returnOld :: Boolean
   } ->
-  (Maybe (Condition a)) ->
-  RIO env (Maybe a)
+  Maybe cond -> -- TODO check condition
+  RIO env (Maybe (Variant items))
 putItem _ { item, returnOld } condition = do
   table <- getTable
   res <- Cl.putItem
@@ -148,12 +158,13 @@ putItem _ { item, returnOld } condition = do
     retValP :: forall r. Castable r (StringLit "NONE" |+| StringLit "ALL_OLD") => r -> (StringLit "NONE" |+| StringLit "ALL_OLD")
     retValP = cast
 
-    { value: conditionExpr, attributeNames, attributeValues } = CmdB.build $ sequence $ CE.buildParams <$> condition
+    { value: conditionExpr, attributeNames, attributeValues } = CmdB.build $ sequence $ buildCondition <$> condition
 
 data UpdateReturnValues =
   URAllNew
   | URAllOld
 
+{-
 updateExistingItem ::
   forall env pNdx a pk.
   HasSingleTableDb env =>
@@ -170,7 +181,8 @@ updateExistingItem repo retVals updateF keyConditionF pk = do
   >>= require "Item"
   where
   finalKeyConditionF =
-    maybe CE.cItemExists (_ `cAnd` CE.cItemExists) keyConditionF
+    ?foo
+    --maybe CE.cItemExists (_ `cAnd` CE.cItemExists) keyConditionF
 
 createOrUpdateItem ::
   forall env pNdx a.
@@ -222,15 +234,16 @@ updateItem _ retVals updateF keyConditionF {pk, sk} = do
 
     retValU :: forall u. Castable u (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW") => u -> (StringLit "NONE" |+| StringLit "ALL_OLD" |+| StringLit "UPDATED_OLD" |+| StringLit "ALL_NEW" |+| StringLit "UPDATED_NEW")
     retValU = cast
+-}
 
 query ::
-  forall env index indexName pNdx a b pkName skName c.
+  forall env index indexName pNdx items b pkName skName c.
   HasSingleTableDb env =>
   IsIndex index indexName pkName skName =>
-  QueryFilter pkName skName c a b =>
+  QueryFilter pkName skName c (Variant items) b =>
   ToValue c U.Condition =>
   ItemCodec b =>
-  Repo pNdx a ->
+  Repo pNdx items ->
   index ->
   { condition :: c
   , scanIndexForward :: Boolean
@@ -261,12 +274,11 @@ query _ index { condition, scanIndexForward } = do
 
 -- Repo
 
-data Repo (primaryIndex :: Index) (a :: Type) = Repo
+data Repo (primaryIndex :: Index) (items :: Row Type) = Repo
 
 mkRepo ::
-  forall pNdx a.
-  ItemCodec a =>
-  Repo pNdx a
+  forall pNdx items.
+  Repo pNdx items
 mkRepo = Repo
 
 -- Utils

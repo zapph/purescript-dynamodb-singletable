@@ -85,6 +85,9 @@ derive instance conditionGeneric :: Generic Condition _
 instance conditionShow :: Show Condition where
   show x = genericShow x
 
+instance conditionToValue :: ToValue Condition Condition where
+  toValue = identity
+
 data Operand =
   OPath Path
   | OValue AttributeValue

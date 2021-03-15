@@ -3,12 +3,11 @@ module AWS.DynamoDB.SingleTable.SchemaSpec
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable (Repo, mkRepo, query)
+import AWS.DynamoDB.SingleTable (Repo, getItem, mkRepo, query)
 import AWS.DynamoDB.SingleTable.DynKeySegment (DynKeySegment, normalizedDynKeySegment)
 import AWS.DynamoDB.SingleTable.Index (PkSk, PrimaryIndex(..))
 import AWS.DynamoDB.SingleTable.Key (Key, mkKey)
 import AWS.DynamoDB.SingleTable.Path (Path'(..))
-import AWS.DynamoDB.SingleTable.Schema (getItem)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb)
 import AWS.DynamoDB.SingleTable.UConditionExpression (beginsWith, opath, ovalue, (:&&), (:=))
 import Data.Maybe (Maybe)
@@ -66,7 +65,7 @@ type Schema =
   , "orderItem" :: OrderItem
   )
 
-repo :: Repo (PkSk "pk" "sk") (Variant Schema)
+repo :: Repo (PkSk "pk" "sk") Schema
 repo = mkRepo
 
 getUserSample :: forall env. HasSingleTableDb env => RIO env (Maybe User)

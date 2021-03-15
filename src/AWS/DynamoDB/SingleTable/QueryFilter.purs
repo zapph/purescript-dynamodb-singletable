@@ -12,8 +12,7 @@ import Prim.Row as Row
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Type.Data.Boolean (class And)
 
-class QueryFilter :: forall condition all filtered. Symbol -> Symbol -> condition -> all -> filtered -> Constraint
-class QueryFilter (pkName :: Symbol) (skName :: Symbol) condition all filtered | pkName skName condition all -> filtered
+class QueryFilter (pkName :: Symbol) (skName :: Symbol) (condition :: Type) (all :: Type) (filtered :: Type) | pkName skName condition all -> filtered
 
 -- begins_with
 
