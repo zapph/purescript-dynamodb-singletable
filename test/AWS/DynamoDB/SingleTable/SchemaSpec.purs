@@ -66,7 +66,7 @@ type Schema =
   )
 
 repo :: Repo (PkSk "pk" "sk") Schema
-repo = mkRepo
+repo = mkRepo { tableName: "SchemaTestTable" }
 
 getUserSample :: forall env. HasSingleTableDb env => RIO env (Maybe User)
 getUserSample =

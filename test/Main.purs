@@ -6,6 +6,7 @@ import Prelude
 
 import AWS.DynamoDB.SingleTable.DynKeySegmentSpec (dynKeySegmentSpec)
 import AWS.DynamoDB.SingleTable.KeySpec (keySpec)
+import AWS.DynamoDB.SingleTable.RequestBuilderSpec (requestBuilderSpec)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Test.Spec.Reporter (consoleReporter)
@@ -15,3 +16,4 @@ main :: Effect Unit
 main = launchAff_ $ runSpec [consoleReporter] do
   dynKeySegmentSpec
   keySpec
+  requestBuilderSpec

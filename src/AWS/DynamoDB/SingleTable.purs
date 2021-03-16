@@ -7,8 +7,6 @@ module AWS.DynamoDB.SingleTable
 --       , updateItem
        , transactWriteItems
        , query
-       , Repo
-       , mkRepo
        , module E
        ) where
 
@@ -18,11 +16,13 @@ import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, readItem, 
 import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
 import AWS.DynamoDB.SingleTable.GetItemFilter (GetItem)
-import AWS.DynamoDB.SingleTable.Index (class IsIndex, Index, indexName)
+import AWS.DynamoDB.SingleTable.Index (class IsIndex, indexName)
 import AWS.DynamoDB.SingleTable.Internal (class FilterRows)
 import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
 import AWS.DynamoDB.SingleTable.Key (Key, printKey)
 import AWS.DynamoDB.SingleTable.QueryFilter (class QueryFilter, class SimplifyVariant)
+import AWS.DynamoDB.SingleTable.Repo (Repo)
+import AWS.DynamoDB.SingleTable.Repo (Repo, mkRepo) as E
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, LastEvaluatedKey(..), PrimaryKey, SingleTableDb(..), dbL)
@@ -271,15 +271,6 @@ query _ index { condition, scanIndexForward } = do
       , "ExpressionAttributeValues": maybeToUor attributeValues
       , "ScanIndexForward": scanIndexForward
       }
-
--- Repo
-
-data Repo (primaryIndex :: Index) (items :: Row Type) = Repo
-
-mkRepo ::
-  forall pNdx items.
-  Repo pNdx items
-mkRepo = Repo
 
 -- Utils
 

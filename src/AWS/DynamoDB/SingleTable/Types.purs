@@ -49,6 +49,10 @@ instance attributeValueEq :: Eq AttributeValue where
 -- workaround for coercible not working on (Object AttributeValue)
 newtype AVObject = AVObject (Object AttributeValue)
 
+derive newtype instance avObjectEq :: Eq AVObject
+instance avObjectShow :: Show AVObject where
+  show (AVObject o) = "(AVObject " <> show o <> ")"
+
 class HasSingleTableDb env where
   dbL :: Lens' env SingleTableDb
 
