@@ -12,39 +12,35 @@ module AWS.DynamoDB.SingleTable
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, readItem, writeItem)
+import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, writeItem)
 import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
-import AWS.DynamoDB.SingleTable.GetItemFilter (GetItem)
+import AWS.DynamoDB.SingleTable.GetItem (class BuildIndexKey, GetItem, readGetItemResponse, writeGetItemRequest)
 import AWS.DynamoDB.SingleTable.Index (class IsIndex, indexName)
 import AWS.DynamoDB.SingleTable.Internal (class FilterRows)
+import AWS.DynamoDB.SingleTable.Internal.ErrorUtils (readItemOrErr)
 import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
-import AWS.DynamoDB.SingleTable.Key (Key, printKey)
 import AWS.DynamoDB.SingleTable.QueryFilter (class QueryFilter, class SimplifyVariant)
 import AWS.DynamoDB.SingleTable.Repo (Repo)
 import AWS.DynamoDB.SingleTable.Repo (Repo, mkRepo) as E
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
-import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), AttributeValue, LastEvaluatedKey(..), PrimaryKey, SingleTableDb(..), dbL)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), LastEvaluatedKey(..), PrimaryKey, SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, LastEvaluatedKey, PrimaryKey, dbL) as E
 import AWS.DynamoDB.SingleTable.UConditionExpression (Condition, buildCondition)
 import AWS.DynamoDB.SingleTable.UConditionExpression as U
-import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Reader (ask)
 import Data.Lens (view)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (sequence, traverse)
 import Data.Variant (Variant)
 import Effect (Effect)
-import Effect.Aff (throwError)
-import Effect.Exception (Error, error)
-import Foreign.Object (Object)
+import Effect.Aff (Aff)
 import Foreign.Object as Object
 import Literals (StringLit, stringLit)
 import RIO (RIO)
 import Untagged.Castable (class Castable, cast)
 import Untagged.Union (type (|+|), maybeToUor, uorToMaybe)
-
 
 mkSingleTableDb :: String -> Effect SingleTableDb
 mkSingleTableDb table =
@@ -52,24 +48,18 @@ mkSingleTableDb table =
   Db { dynamodb, table }
 
 getItem ::
-  forall env pNdx items pks sks items' out.
-  HasSingleTableDb env =>
-  ItemCodec out =>
-  FilterRows (GetItem (Key pks) (Key sks)) items items' =>
-  SimplifyVariant items' out =>
+  forall pNdx pNdxKey items items' item.
+  BuildIndexKey pNdx pNdxKey =>
+  FilterRows (GetItem pNdxKey) items items' =>
+  SimplifyVariant items' item =>
+  ItemCodec item =>
   Repo pNdx items ->
-  { pk :: Key pks, sk :: Key sks } ->
-  RIO env (Maybe out)
-getItem repo { pk, sk } = do
-  table <- getTable
-  res <- Cl.getItem
-    { "Key": AVObject $ Object.fromHomogeneous
-        { "pk": avS (printKey pk)
-        , "sk": avS (printKey sk)
-        }
-    , "TableName": table
-    }
-  traverse readItemOrErr (uorToMaybe (res."Item"))
+  pNdxKey ->
+  Aff { item :: Maybe item }
+getItem repo pNdxKey =
+  Cl.getItem repo request >>= readGetItemResponse repo pNdxKey
+  where
+    request = writeGetItemRequest repo pNdxKey
 
 deleteItem ::
   forall env pNdx items.
@@ -273,35 +263,6 @@ query _ index { condition, scanIndexForward } = do
       }
 
 -- Utils
-
-require ::
-  forall m a.
-  MonadThrow Error m =>
-  String ->
-  Maybe a ->
-  m a
-require _ (Just a) = pure a
-require name Nothing = throwError $ error $ "did not find " <> name
-
-readItemOrErr ::
-  forall m a.
-  MonadThrow Error m =>
-  ItemCodec a =>
-  Object AttributeValue ->
-  m a
-readItemOrErr o = case readItem o of
-  Just a -> pure a
-  Nothing -> throwError $ error "unreadable item"
-
-readItemOrErrAVObject ::
-  forall m a.
-  MonadThrow Error m =>
-  ItemCodec a =>
-  AVObject ->
-  m a
-readItemOrErrAVObject (AVObject o) = case readItem o of
-  Just a -> pure a
-  Nothing -> throwError $ error "unreadable item"
 
 getTable ::
   forall env.

@@ -4,6 +4,7 @@ module AWS.DynamoDB.SingleTable.Client
        , ItemCollectionMetrics
        , newDynamoDb
        , GetItemReq
+       , GetItemResp
        , getItem
        , QueryReq
        , query
@@ -19,11 +20,13 @@ module AWS.DynamoDB.SingleTable.Client
 
 import Prelude
 
+import AWS.DynamoDB.SingleTable.Repo (Repo, repoAWSDynamoDb)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject, AWSDynamoDb, AttributeValue, SingleTableDb(..), dbL, TransactWriteItemsOperation)
 import Control.Monad.Reader (ask)
 import Control.Promise (Promise, toAffE)
 import Data.Lens (view)
 import Effect (Effect)
+import Effect.Aff (Aff)
 import Effect.Aff.Class (liftAff)
 import Foreign.Object (Object)
 import Literals (StringLit)
@@ -59,13 +62,17 @@ type GetItemReq =
   , "TableName" :: String
   }
 
+type GetItemResp =
+  { "Item" :: UndefinedOr (Object AttributeValue)
+  }
+
 getItem ::
-  forall env req.
-  HasSingleTableDb env =>
+  forall pNdx items req.
   Castable req GetItemReq =>
+  Repo pNdx items ->
   req ->
-  RIO env { "Item" :: UndefinedOr (Object AttributeValue) }
-getItem = _callDbFn "getItem"
+  Aff GetItemResp
+getItem = _callRepoDbFn "getItem"
 
 type QueryReq =
   { "TableName" :: String
@@ -192,3 +199,12 @@ _callDbFn ::
 _callDbFn fnName params = do
   Db { dynamodb } <- view dbL <$> ask
   liftAff $ toAffE $ _callDbFnEffP fnName dynamodb params
+
+_callRepoDbFn ::
+  forall params pNdx items  res.
+  String ->
+  Repo pNdx items -> -- todo. probably better not to have this type dep
+  params ->
+  Aff res
+_callRepoDbFn fnName repo params = do
+  toAffE $ _callDbFnEffP fnName (repoAWSDynamoDb repo) params
