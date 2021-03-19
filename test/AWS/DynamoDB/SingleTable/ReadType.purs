@@ -24,7 +24,7 @@ class ReadType a where
 instance readTypeInt :: ReadType Int where
   readType _ = "Int"
 instance readTypeString :: ReadType String where
-  readType _ = "Int"
+  readType _ = "String"
 instance readTypeKey ::
   IsSymbol s =>
   ReadType (Key s) where
