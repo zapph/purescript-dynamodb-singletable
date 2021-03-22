@@ -4,6 +4,7 @@ module Test.Main
 
 import Prelude
 
+import AWS.DynamoDB.SingleTable.DeleteItemSpec (deleteItemSpec)
 import AWS.DynamoDB.SingleTable.DynKeySegmentSpec (dynKeySegmentSpec)
 import AWS.DynamoDB.SingleTable.GetItemSpec (getItemSpec)
 import AWS.DynamoDB.SingleTable.KeySpec (keySpec)
@@ -17,3 +18,4 @@ main = launchAff_ $ runSpec [consoleReporter] do
   dynKeySegmentSpec
   keySpec
   getItemSpec
+  deleteItemSpec

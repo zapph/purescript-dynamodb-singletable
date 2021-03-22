@@ -8,7 +8,9 @@ module AWS.DynamoDB.SingleTable.Client
        , getItem
        , QueryReq
        , query
+       , DeleteReturnValues
        , DeleteItemReq
+       , DeleteItemResp
        , deleteItem
        , PutItemReq
        , putItem
@@ -103,21 +105,27 @@ query ::
           }
 query = _callDbFn "query"
 
+type DeleteReturnValues =
+  StringLit "NONE" |+| StringLit "ALL_OLD"
+
 -- // TODO: deleteItemreq seems to be lacking other options
 -- https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DeleteItem.html
 type DeleteItemReq =
   { "Key" :: AVObject
   , "TableName" :: String
-  , "ReturnValues" :: UndefinedOr (StringLit "NONE" |+| StringLit "ALL_OLD")
+  , "ReturnValues" :: UndefinedOr DeleteReturnValues
   }
 
+type DeleteItemResp =
+  { "Attributes" :: UndefinedOr (Object AttributeValue) }
+
 deleteItem ::
-  forall env req.
-  HasSingleTableDb env =>
+  forall pNdx items req.
   Castable req DeleteItemReq =>
+  Repo pNdx items ->
   req ->
-  RIO env { "Attributes" :: UndefinedOr (Object AttributeValue) }
-deleteItem = _callDbFn "deleteItem"
+  Aff DeleteItemResp
+deleteItem = _callRepoDbFn "deleteItem"
 
 type PutItemReq =
   { "Item" :: Object AttributeValue

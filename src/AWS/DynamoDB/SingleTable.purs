@@ -2,7 +2,7 @@ module AWS.DynamoDB.SingleTable
        ( UpdateReturnValues(..)
        , mkSingleTableDb
        , getItem
-       , deleteItem
+--       , deleteItem
        , putItem
 --       , updateItem
        , transactWriteItems
@@ -12,11 +12,12 @@ module AWS.DynamoDB.SingleTable
 
 import Prelude
 
-import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, avS, writeItem)
+import AWS.DynamoDB.SingleTable.AttributeValue (class ItemCodec, writeItem)
 import AWS.DynamoDB.SingleTable.Client as Cl
 import AWS.DynamoDB.SingleTable.CommandBuilder as CmdB
-import AWS.DynamoDB.SingleTable.GetItem (class BuildIndexKey, GetItem, readGetItemResponse, writeGetItemRequest)
-import AWS.DynamoDB.SingleTable.Index (class IsIndex, indexName)
+import AWS.DynamoDB.SingleTable.DeleteItem (DeleteItem, DeleteReq, readDeleteItemResponse, writeDeleteItemRequest)
+import AWS.DynamoDB.SingleTable.GetItem (GetItem, readGetItemResponse, writeGetItemRequest)
+import AWS.DynamoDB.SingleTable.Index (class BuildIndexKey, class IsIndex, indexName)
 import AWS.DynamoDB.SingleTable.Internal (class FilterRows)
 import AWS.DynamoDB.SingleTable.Internal.ErrorUtils (readItemOrErr)
 import AWS.DynamoDB.SingleTable.Internal.ToValue (class ToValue)
@@ -25,7 +26,7 @@ import AWS.DynamoDB.SingleTable.Repo (Repo)
 import AWS.DynamoDB.SingleTable.Repo (Repo, mkRepo) as E
 import AWS.DynamoDB.SingleTable.TransactWriteItems (TransactWriteItemsOperationF)
 import AWS.DynamoDB.SingleTable.TransactWriteItems as TWI
-import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, AVObject(..), LastEvaluatedKey(..), PrimaryKey, SingleTableDb(..), dbL)
+import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, LastEvaluatedKey(..), SingleTableDb(..), dbL)
 import AWS.DynamoDB.SingleTable.Types (class HasSingleTableDb, SingleTableDb, GSI1, LastEvaluatedKey, PrimaryKey, dbL) as E
 import AWS.DynamoDB.SingleTable.UConditionExpression (Condition, buildCondition)
 import AWS.DynamoDB.SingleTable.UConditionExpression as U
@@ -36,7 +37,6 @@ import Data.Traversable (sequence, traverse)
 import Data.Variant (Variant)
 import Effect (Effect)
 import Effect.Aff (Aff)
-import Foreign.Object as Object
 import Literals (StringLit, stringLit)
 import RIO (RIO)
 import Untagged.Castable (class Castable, cast)
@@ -62,24 +62,18 @@ getItem repo pNdxKey =
     request = writeGetItemRequest repo pNdxKey
 
 deleteItem ::
-  forall env pNdx items.
-  HasSingleTableDb env =>
-  ItemCodec (Variant items) =>
+  forall pNdx pNdxKey items items' item.
+  BuildIndexKey pNdx pNdxKey =>
+  FilterRows (DeleteItem pNdxKey) items items' =>
+  SimplifyVariant items' item =>
+  ItemCodec item =>
   Repo pNdx items ->
-  PrimaryKey ->
-  RIO env (Maybe (Variant items))
-deleteItem _ { pk, sk } = do
-  table <- getTable
-  res <- Cl.deleteItem
-    { "Key": AVObject $ Object.fromHomogeneous
-        { "pk": avS pk
-        , "sk": avS sk
-        }
-    , "TableName": table
-    , "ReturnValues": stringLit :: _ "ALL_OLD"
-    }
-  traverse readItemOrErr (uorToMaybe (res."Attributes"))
-
+  DeleteReq pNdxKey ->
+  Aff { attributes :: Maybe item }
+deleteItem repo pNdxKey =
+  Cl.deleteItem repo request >>= readDeleteItemResponse repo pNdxKey
+  where
+    request = writeDeleteItemRequest repo pNdxKey
 
 transactWriteItems ::
   forall env.
